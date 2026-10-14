@@ -55,10 +55,51 @@ Apple behavior; it previously dropped every row with an absent infrared channel.
 imported metric coverage. [open_health](https://github.com/Th0rgal/open_health) informed the separation
 of sleep, activity, and vital signals. No reference-project implementation or assets were copied.
 
-This change is source-reviewed only. Tests, builds, and hardware exercises were explicitly deferred
-by the fork owner. Runtime behavior has not been verified.
+Device verification resumed on 2026-10-14 using a OnePlus 9 Pro (LE2125), Android 16 / API 36,
+over wireless ADB. The Full debug app built and installed successfully. Seven instrumentation tests
+exercise real Room reads and Compose UI using synthetic records:
+
+- Ring/source isolation, exclusive time boundaries, accepted single-channel oxygen, and temperature scaling.
+- Imported metric precedence and a 23-hour daylight-saving calendar day.
+- Chart taps and horizontal scrubbing, missing-bucket clearing, and exact-value accessibility actions.
+- Source/window/range controls at 200% font scale.
+- Dashboard loading, refresh, and saved-state restoration.
+- Sleep totals and timeline clipping to the same edited session, plus summary-only imported sleep.
+
+Full and Demo debug APKs build successfully. Each JVM suite reports 6,687 tests, zero failures/errors,
+and six existing skips. The diff-scoped localization audit, doc-comment lint, and `git diff --check` pass.
+Full and Demo staging-release assembly and vital lint also pass. Combined release lint exhausted the
+default 2 GB Gradle heap; the successful local run used
+`-PstagingRelease -Dorg.gradle.jvmargs="-Xmx4096m -Dfile.encoding=UTF-8" --max-workers=2`.
+
+The sleep regression first failed on the phone (15 reported minutes for a 10-minute visible interval)
+and passed after the fix. JVM coverage also checks medians, original-sample statistics, missing buckets,
+nonfinite samples, and batch equivalence. Test screenshots use synthetic data and remain build artifacts.
+The instrumentation dependencies use Espresso 3.7.0 and AndroidX JUnit 1.3.0 for Android 16 compatibility;
+dependency locks and verified checksums are committed.
+
 The source strings have English resources; new translations remain pending. Existing Bluetooth,
 storage schema, import parsing, and scoring behavior are unchanged.
+
+### Reproducing the device checks
+
+From `android/`, with the SDK and JDK configured:
+
+```sh
+./gradlew assembleFullDebug testFullDebugUnitTest --no-build-cache --rerun-tasks
+./gradlew assembleFullDebugAndroidTest
+adb -s DEVICE_SERIAL install -r app/build/outputs/apk/full/debug/app-full-debug.apk
+adb -s DEVICE_SERIAL install -r app/build/outputs/apk/androidTest/full/debug/app-full-debug-androidTest.apk
+adb -s DEVICE_SERIAL shell am instrument -w -r \
+  -e class com.noop.ui.OuraDashboardDeviceTest \
+  com.noop.whoop.debug.test/androidx.test.runner.AndroidJUnitRunner
+```
+
+Keep JVM tests and instrumentation assembly in separate Gradle invocations: test-source KSP can
+invalidate the Room schema export in a combined invocation. The direct ADB runner was used because
+AGP 8.5.2's connected-device discovery threw a host-side null-pointer exception for this wireless device.
+Check the runner's `OK (7 tests)` summary; the ADB process exit status alone does not establish success.
+Screenshots are saved in the debug app's external-files `oura-test-evidence` directory.
 
 ## Android interaction and motion
 
@@ -75,5 +116,7 @@ storage schema, import parsing, and scoring behavior are unchanged.
   No animation interpolates physiological readings. Clock labels follow NOOP’s clock preference.
 - TalkBack exposes previous/next reading actions with exact bucket timestamps, extrema, and counts.
 
-These changes have been inspected in source, not measured on a device. Smoothness, large-font layouts,
-and TalkBack behavior still need runtime verification when testing is resumed.
+The tested large-font controls and chart inspection rendered successfully on the phone. Accessibility
+actions were invoked through Compose semantics; spoken TalkBack navigation has not been verified.
+Large-history scrolling performance, error/refresh races, live ring collection, and calibration remain
+outside this device run. No real biometric data or Bluetooth ring commands were used by the tests.

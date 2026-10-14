@@ -6,7 +6,8 @@
 
 **Design brief:** The requested references motivate a dedicated overview, historical navigation, sleep and vital charts. Use existing design tokens and navigation. Missing data stays missing. Oxygen calibration and ring-reported HRV/breathing remain explicitly qualified. No new account or network dependency.
 
-**Execution:** Inline implementation, followed by independent source review. Tests, builds, and device exercises are deferred at the user's explicit request.
+**Execution:** Inline implementation, followed by independent source review. Testing was initially deferred;
+the owner subsequently authorized builds, tests, and validation on the connected Android device.
 
 ## Tasks
 
@@ -35,8 +36,8 @@ Scope: Android only. Cracked-Oura and open_health are reference material. Apple 
 changes are excluded from the final diff, per the owner's clarification. The new reduction helper is
 Android presentation logic and does not change stored data or scoring.
 
-Tests, builds, and hardware checks remain deferred under the owner's instruction. Source review and
-`git diff --check` do not establish runtime correctness.
+The initial source-only review did not establish runtime correctness. Verification has since resumed;
+see the device-validation update below.
 
 ## Android usability refinement
 
@@ -45,9 +46,18 @@ backdrop settings, and Reduce Motion-aware entrances; retain same-window data du
 keeping source/window changes isolated. Save navigation controls, render metrics/nights lazily, parse
 visible sleep timelines in the background, cache chart paths, and reserve inspection space. Fade only
 the optional range bands on a fixed domain; physiological values remain exact. Add accessible bucket
-navigation and honor the existing clock preference. Review source and update the informational draft
-PR without running tests, builds, or hardware checks.
+navigation and honor the existing clock preference. The initial refinement was reviewed and added to
+the draft PR before testing was authorized.
 
 Implementation and independent source review are complete. Review follow-ups expose selected bucket
 values to TalkBack, let large-text inspection details wrap, and key pointer handlers to refreshed
 selection state. No performance measurements have been run. New translations remain pending.
+
+## Device-validation update
+
+The owner authorized PR #1 development and testing over wireless ADB on 2026-10-14. Full and Demo
+debug builds and JVM suites pass (6,687 reported tests per flavor, six existing skips). Seven device
+tests pass on a OnePlus 9 Pro running Android 16. A reproduced sleep-card bug was fixed so totals and
+timeline use the same session bounds. AndroidX instrumented-test dependencies were updated for
+Android 16; app runtime dependencies are unchanged. Independent review and localization/source-hygiene
+checks pass. Detailed coverage, commands, and remaining limits are in [OURA_DASHBOARD.md](../../OURA_DASHBOARD.md).

@@ -23,9 +23,21 @@ internal fun OuraSleepCard(sleep: SleepSession) {
     val parsed by produceState<Pair<SleepStageTotals.Minutes?, List<PersistedSegment>>?>(null, sleep) {
         value = null
         value = withContext(Dispatchers.Default) {
-            val clamped = SleepStageTotals.clampStagesToOnset(sleep.stagesJSON, sleep.effectiveStartTs)
+            // Both readouts must describe the same edited session. Aggregate-only imports
+            // have no timestamps to clip and retain their reported minute totals.
+            val onsetClamped = SleepStageTotals.clampStagesToOnset(sleep.stagesJSON, sleep.effectiveStartTs)
+            val clamped = runCatching {
+                val array = JSONArray(onsetClamped ?: "[]")
+                for (index in 0 until array.length()) {
+                    val stage = array.optJSONObject(index) ?: continue
+                    if (stage.has("start") && stage.has("end")) {
+                        stage.put("end", minOf(stage.getLong("end"), sleep.endTs))
+                    }
+                }
+                array.toString()
+            }.getOrDefault(onsetClamped)
             val stages = runCatching {
-                val array = JSONArray(sleep.stagesJSON ?: "[]")
+                val array = JSONArray(clamped ?: "[]")
                 (0 until array.length()).mapNotNull { index ->
                     val stage = array.getJSONObject(index)
                     val start = maxOf(stage.getLong("start"), sleep.effectiveStartTs)

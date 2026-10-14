@@ -114,7 +114,7 @@ private fun OuraSignalPlot(
 ) {
     val reduced = rememberReduceMotion()
     val bandAlpha = animateFloatAsState(if (showRange) StrandAlpha.selectedFill else 0f,
-        animationSpec = if (reduced) tween(0) else NoopMotion.value(), label = "Oura ranges")
+        animationSpec = if (reduced) tween(0) else NoopMotion.value())
     val inspectHint = stringResource(R.string.oura_inspect)
     val previous = stringResource(R.string.oura_previous_reading)
     val next = stringResource(R.string.oura_next_reading)
