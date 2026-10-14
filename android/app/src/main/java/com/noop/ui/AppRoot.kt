@@ -172,6 +172,7 @@ internal enum class Destination(
     LabBook("lab_book", R.string.nav_lab_book, Icons.Filled.HealthAndSafety),
     Rhythm("rhythm", R.string.nav_rhythm, Icons.Filled.MonitorHeart),
     AppleHealth("apple_health", R.string.nav_apple_health, Icons.Filled.HealthAndSafety),
+    Oura("oura", R.string.oura_title, Icons.Filled.MonitorHeart),
 
     // Group: System
     Automations("automations", R.string.nav_automations, Icons.Filled.Bolt),
@@ -247,7 +248,7 @@ internal val drawerGroups: List<DrawerGroup> = listOf(
         Destination.Rhythm,
     ), defaultExpanded = true),
     DrawerGroup("Data", R.string.more_group_data, listOf(
-        Destination.FusedRecord, Destination.AppleHealth, Destination.DataSources,
+        Destination.FusedRecord, Destination.AppleHealth, Destination.Oura, Destination.DataSources,
         Destination.BackupSync, Destination.Devices, Destination.NoopLimitations,
     ), defaultExpanded = false),
     DrawerGroup("App", R.string.more_group_app, listOf(
@@ -757,6 +758,10 @@ fun AppRoot(viewModel: AppViewModel = viewModel()) {
                 }
                 composable(Destination.FusedRecord.route) { FusedRecordRoute(viewModel) }
                 composable(Destination.AppleHealth.route) { AppleHealthScreen(viewModel) }
+                composable(Destination.Oura.route) {
+                    OuraScreen(viewModel, onDevices = { nav.navigate(Destination.Devices.route) },
+                        onImport = { nav.navigate(Destination.DataSources.route) })
+                }
                 composable(Destination.Devices.route) {
                     DevicesScreen(
                         viewModel,

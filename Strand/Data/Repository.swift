@@ -2072,6 +2072,41 @@ final class Repository: ObservableObject {
         return DeviceFamily.isWhoop5Registry(model: d?.model, brand: d?.brand)
     }
 
+    func ouraDashboardSources() async throws -> [OuraDashboardSource] {
+        guard let store = await ensureStore() else { throw OuraDashboardData.ReadError.unavailable }
+        let rings = try DeviceRegistryStore(dbQueue: store.registryWriter).all()
+            .filter { $0.sourceKind == .oura }
+            .map { OuraDashboardSource(id: $0.id, name: $0.displayName) }
+        return rings + [
+            OuraDashboardSource(id: "oura-import", name: String(localized: "Oura export")),
+            OuraDashboardSource(id: "oura-api", name: String(localized: "Oura API history"))
+        ]
+    }
+
+    func ouraDashboard(source: OuraDashboardSource, from: Int, to: Int,
+                       bucketSeconds: Int) async throws -> OuraDashboardData {
+        guard let store = await ensureStore() else { throw OuraDashboardData.ReadError.unavailable }
+        let task = Task.detached(priority: .utility) {
+            try await OuraDashboardData.load(store: store, source: source, from: from, to: to,
+                                             bucketSeconds: bucketSeconds)
+        }
+        return try await withTaskCancellationHandler(operation: { try await task.value }, onCancel: { task.cancel() })
+    }
+
+    func ouraDashboardLatestDay(source: OuraDashboardSource) async throws -> Date? {
+        guard let store = await ensureStore() else { throw OuraDashboardData.ReadError.unavailable }
+        if !source.isImport {
+            return try await store.latestHRSampleTs(deviceId: source.id).map { Date(timeIntervalSince1970: Double($0)) }
+        }
+        let rows = try await store.dailyMetrics(deviceId: source.id, from: "1970-01-01", to: "9999-12-31")
+        guard let day = rows.map(\.day).max() else { return nil }
+        let parser = DateFormatter()
+        parser.locale = Locale(identifier: "en_US_POSIX")
+        parser.calendar = Calendar(identifier: .gregorian)
+        parser.dateFormat = "yyyy-MM-dd"
+        return parser.date(from: day)
+    }
+
     /// The active device's registry display name (nickname, else "Brand Model") for a screen that names
     /// the source of what it plots — the Deep Timeline's source row. `nil` when the active id has no
     /// registry row (the pre-registry seeded strap), so the caller keeps its legacy "My WHOOP" copy.
