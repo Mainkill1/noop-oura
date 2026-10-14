@@ -29,6 +29,7 @@ internal fun OuraControls(
     showRange: Boolean, loading: Boolean,
     onSource: (String) -> Unit, onDay: (LocalDate) -> Unit, onDays: (Int) -> Unit,
     onRanges: (Boolean) -> Unit, onRefresh: () -> Unit, onDevices: () -> Unit, onImport: () -> Unit,
+    onKeys: () -> Unit = {},
 ) {
     val context = LocalContext.current
     var sourceMenu by remember { mutableStateOf(false) }
@@ -57,6 +58,8 @@ internal fun OuraControls(
                         Icon(Icons.Filled.MoreHoriz, contentDescription = stringResource(R.string.nav_more))
                     }
                     DropdownMenu(expanded = actionsMenu, onDismissRequest = { actionsMenu = false }) {
+                        DropdownMenuItem(text = { Text(stringResource(R.string.oura_keys_title)) },
+                            onClick = { actionsMenu = false; onKeys() })
                         DropdownMenuItem(text = { Text(stringResource(R.string.oura_manage)) },
                             onClick = { actionsMenu = false; onDevices() })
                         DropdownMenuItem(text = { Text(stringResource(R.string.oura_import)) },

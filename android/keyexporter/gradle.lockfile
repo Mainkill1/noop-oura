@@ -1,0 +1,18 @@
+# This is a Gradle generated file for dependency locking.
+# Manual edits can break the build and are not advised.
+# This file is expected to be part of source control.
+androidx.annotation:annotation-jvm:1.8.0=debugCompileClasspath,debugRuntimeClasspath,releaseCompileClasspath,releaseRuntimeClasspath
+androidx.annotation:annotation:1.8.0=debugCompileClasspath,debugRuntimeClasspath,releaseCompileClasspath,releaseRuntimeClasspath
+androidx.collection:collection-jvm:1.4.0=debugCompileClasspath,debugRuntimeClasspath,releaseCompileClasspath,releaseRuntimeClasspath
+androidx.collection:collection:1.4.0=debugCompileClasspath,debugRuntimeClasspath,releaseCompileClasspath,releaseRuntimeClasspath
+androidx.security:security-crypto:1.1.0-alpha06=debugCompileClasspath,debugRuntimeClasspath,releaseCompileClasspath,releaseRuntimeClasspath
+com.google.code.gson:gson:2.8.9=debugCompileClasspath,debugRuntimeClasspath,releaseCompileClasspath,releaseRuntimeClasspath
+com.google.crypto.tink:tink-android:1.8.0=debugCompileClasspath,debugRuntimeClasspath,releaseCompileClasspath,releaseRuntimeClasspath
+org.jetbrains.intellij.deps:trove4j:1.0.20200330=kotlinCompilerClasspath
+org.jetbrains.kotlin:kotlin-compiler-embeddable:1.9.24=kotlinCompilerClasspath
+org.jetbrains.kotlin:kotlin-daemon-embeddable:1.9.24=kotlinCompilerClasspath
+org.jetbrains.kotlin:kotlin-reflect:1.6.10=kotlinCompilerClasspath
+org.jetbrains.kotlin:kotlin-script-runtime:1.9.24=kotlinCompilerClasspath
+org.jetbrains.kotlin:kotlin-stdlib:1.9.24=debugCompileClasspath,debugRuntimeClasspath,kotlinCompilerClasspath,releaseCompileClasspath,releaseRuntimeClasspath
+org.jetbrains:annotations:13.0=debugCompileClasspath,debugRuntimeClasspath,kotlinCompilerClasspath,releaseCompileClasspath,releaseRuntimeClasspath
+empty=androidApis,debugAnnotationProcessorClasspath,debugReverseMetadataValues,kotlinCompilerPluginClasspathDebug,kotlinCompilerPluginClasspathRelease,lintChecks,releaseAnnotationProcessorClasspath,releaseReverseMetadataValues

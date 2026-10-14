@@ -117,6 +117,8 @@ android {
         }
     }
 
+    sourceSets.getByName("main").java.srcDir("../key-transfer/src/main/java")
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -248,6 +250,7 @@ dependencyLocking {
 }
 
 dependencies {
+    implementation("com.google.crypto.tink:tink-android:1.8.0")
     // --- Compose (BOM pins all Compose artifact versions in lockstep) ---
     val composeBom = platform("androidx.compose:compose-bom:2024.06.00")
     implementation(composeBom)

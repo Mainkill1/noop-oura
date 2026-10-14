@@ -1,0 +1,12 @@
+<resources>
+    <string name="app_name">Oura Key Exporter</string>
+    <string name="explanation">Export your ring keys from an installed NOOP app before switching apps. Root access is required. Keep the original app installed until export succeeds.</string>
+    <string name="package_label">Source app package</string>
+    <string name="export">Export ring keys</string>
+    <string name="working">Reading keys with root…</string>
+    <string name="saved">Key file saved. Import it from Oura → More → Transfer ring keys in the new NOOP app.</string>
+    <string name="sensitive">The exported XML contains your ring keys in readable form. Store it privately and delete spare copies after importing.</string>
+    <string name="failed">Export failed. Grant this exporter root access and check that the source app is installed for this Android user and still has its original Keystore keys.</string>
+    <string name="save_failed">Could not save the key file. Try another location.</string>
+    <string name="cancelled">Export cancelled. No key file was saved.</string>
+</resources>

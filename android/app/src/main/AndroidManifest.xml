@@ -155,6 +155,8 @@
         <package android:name="com.meizu.safe" />
     </queries>
 
+    <queries><package android:name="com.noop.oura.keyexporter" /></queries>
+
     <application
         android:name=".NoopApplication"
         android:allowBackup="false"

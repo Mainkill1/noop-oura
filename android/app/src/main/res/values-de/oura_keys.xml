@@ -1,0 +1,17 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+  <string name="oura_keys_title">Ringschlüssel übertragen</string>
+  <string name="oura_keys_import">Schlüssel-XML importieren</string>
+  <string name="oura_keys_export">Ringschlüssel exportieren</string>
+  <string name="oura_keys_description">Übertragen Sie Ringzugangsdaten zwischen NOOP-Apps mit noop_oura_secure_prefs.xml. Importieren Sie die Datei vor dem Verbinden oder wählen Sie sie beim Hinzufügen eines Rings in der erweiterten Einrichtung.</string>
+  <string name="oura_keys_sensitive">Die portable XML enthält lesbare Ringschlüssel. Bewahren Sie sie vertraulich auf und löschen Sie zusätzliche Kopien nach dem Import.</string>
+  <string name="oura_keys_encrypted">Diese Sicherung ist durch den Android Keystore einer anderen App verschlüsselt. Verwenden Sie Oura Key Exporter mit Root, solange die ursprüngliche App noch installiert ist, und importieren Sie dann die exportierte XML.</string>
+  <string name="oura_keys_invalid">Keine gültigen Ringschlüssel gefunden. Wählen Sie einen vollständigen Export von noop_oura_secure_prefs.xml mit 16-Byte-Installationsschlüsseln.</string>
+  <string name="oura_keys_review">Diese Ringschlüssel importieren? Vorhandene Schlüssel für die aufgeführten Ringe werden ersetzt.</string>
+  <string name="oura_keys_restore">Aufgeführte Schlüssel importieren</string>
+  <string name="oura_keys_restored">Ringschlüssel importiert. Sie können Ihren Ring nun über die erweiterte Einrichtung ohne Zurücksetzen hinzufügen.</string>
+  <string name="oura_keys_saved">Schlüssel-XML gespeichert.</string>
+  <string name="oura_keys_failed">Die Schlüssel konnten nicht gespeichert werden. Versuchen Sie es erneut.</string>
+  <string name="oura_keys_empty">In dieser App sind keine Ringschlüssel gespeichert.</string>
+  <string name="oura_keys_done">Fertig</string>
+</resources>

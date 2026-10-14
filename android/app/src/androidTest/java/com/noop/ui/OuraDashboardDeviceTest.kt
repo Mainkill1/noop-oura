@@ -32,6 +32,26 @@ import java.util.TimeZone
 class OuraDashboardDeviceTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun overviewShowsMissingAndMeasuredStatsTogetherAtLargeText() {
+        val summary = SignalDecimation.reduce(listOf(SignalDecimation.Sample(10, 32.5)), 0, 300, 300)
+        compose.setContent {
+            val density = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(density.density, 2f)) {
+                TestTheme {
+                    Column(Modifier.verticalScroll(rememberScrollState())) {
+                        OuraStatsOverview(OuraDashboardData(signals = mapOf("temperature" to summary)),
+                            listOf("hr", "temperature", "battery"), false, TemperatureUnit.FAHRENHEIT)
+                    }
+                }
+            }
+        }
+        compose.onNodeWithText("All Oura stats").assertIsDisplayed()
+        compose.onNodeWithText("90.5").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Battery history").performScrollTo().assertIsDisplayed()
+        assertEquals(2, compose.onAllNodesWithText("—").fetchSemanticsNodes().size)
+        captureEvidence("overview-large-text")
+    }
+
     @Test fun mainNavigationOpensOuraWithoutOpeningMore() {
         val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as android.app.Application
         val store = ViewModelStore()
@@ -61,12 +81,14 @@ class OuraDashboardDeviceTest {
                 LazyScreenScaffold(title = "Oura", subtitle = "Your ring, your history, clearer signals.") {
                     item { OuraControls(listOf(OuraDashboardSource("fixture", "Oura Ring")), "fixture", day, 1,
                         false, false, {}, {}, {}, {}, {}, {}, {}) }
+                    item { OuraStatsOverview(OuraDashboardData(signals = mapOf("hr" to summary)),
+                        listOf("hr", "oxygen", "temperature", "hrv", "breathing", "movement", "battery"), false, TemperatureUnit.CELSIUS) }
                     item { OuraSignalCard("Heart rate", "bpm", "", summary, from, to, false) }
                 }
             }
         }
         captureEvidence("dashboard-populated")
-        compose.onNodeWithText("Heart rate").performScrollTo()
+        compose.onAllNodesWithText("Heart rate").onLast().performScrollTo()
         captureEvidence("dashboard-chart")
     }
 

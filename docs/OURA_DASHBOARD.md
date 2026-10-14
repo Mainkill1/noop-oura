@@ -142,3 +142,14 @@ The device suite exercises AppRoot → Oura, rather than only mounting the dashb
 
 Navigation verification: Full and Demo debug builds, 63 focused navigation/Coach JVM tests, and all
 nine dashboard device tests pass. The installed app was also opened through its visible Oura tab.
+
+### One Oura dashboard
+
+The Oura tab opens a compact overview of every supported statistic for the selected source, then
+sleep sessions and detailed graphs on the same scrolling page. The single 1/7/30-day selector changes
+the date range for all of them. Overview values are original-sample averages, and missing readings
+remain dashes rather than hiding metrics or showing zeros. Graph cards appear only where readings
+exist. At enlarged text sizes the overview uses one column so labels and values can wrap.
+
+Ring credential transfer is available from the dashboard toolbar’s More menu. See
+[Oura key transfer](OURA_KEY_TRANSFER.md) for the standalone root exporter and XML import flow.

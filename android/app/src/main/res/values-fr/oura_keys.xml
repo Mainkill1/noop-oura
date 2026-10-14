@@ -1,0 +1,17 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+  <string name="oura_keys_title">Transférer les clés de la bague</string>
+  <string name="oura_keys_import">Importer le XML des clés</string>
+  <string name="oura_keys_export">Exporter les clés de la bague</string>
+  <string name="oura_keys_description">Transférez les identifiants de la bague entre les apps NOOP avec noop_oura_secure_prefs.xml. Importez avant la connexion ou sélectionnez le XML dans la configuration avancée lors de l’ajout de la bague.</string>
+  <string name="oura_keys_sensitive">Le XML portable contient les clés lisibles de la bague. Conservez-le de façon privée et supprimez les copies superflues après l’importation.</string>
+  <string name="oura_keys_encrypted">Cette sauvegarde est chiffrée par le Keystore Android d’une autre app. Utilisez Oura Key Exporter avec root tant que l’app d’origine est installée, puis importez le XML exporté.</string>
+  <string name="oura_keys_invalid">Aucune clé valide trouvée. Sélectionnez une exportation complète de noop_oura_secure_prefs.xml avec des clés d’installation de 16 octets.</string>
+  <string name="oura_keys_review">Importer ces clés ? Les clés existantes des bagues indiquées seront remplacées.</string>
+  <string name="oura_keys_restore">Importer les clés indiquées</string>
+  <string name="oura_keys_restored">Clés importées. Vous pouvez ajouter votre bague via la configuration avancée sans la réinitialiser.</string>
+  <string name="oura_keys_saved">XML des clés enregistré.</string>
+  <string name="oura_keys_failed">Impossible d’enregistrer les clés. Réessayez.</string>
+  <string name="oura_keys_empty">Aucune clé de bague n’est enregistrée dans cette app.</string>
+  <string name="oura_keys_done">Terminé</string>
+</resources>

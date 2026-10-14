@@ -7,6 +7,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.noop.R
@@ -26,6 +27,8 @@ import kotlin.coroutines.coroutineContext
 
 @Composable
 fun OuraScreen(vm: AppViewModel, onDevices: () -> Unit, onImport: () -> Unit) {
+    var showKeyTransfer by remember { mutableStateOf(false) }
+    if (showKeyTransfer) OuraKeyTransferDialog(onDismiss = { showKeyTransfer = false })
     val activeId by vm.activeStrapIdFlow.collectAsStateWithLifecycle()
     val recentDays by vm.recentDays.collectAsStateWithLifecycle()
     var sources by remember { mutableStateOf<List<OuraDashboardSource>>(emptyList()) }
@@ -103,7 +106,7 @@ fun OuraScreen(vm: AppViewModel, onDevices: () -> Unit, onImport: () -> Unit) {
     val failed = errorKey == windowKey
     val imported = source?.isImport == true
     val metricKeys = remember(snapshot, imported) {
-        if (imported) OuraDashboardData.importedKeys.filter { (snapshot?.signals?.get(it)?.count ?: 0) > 0 }.ifEmpty { listOf("rhr") }
+        if (imported) OuraDashboardData.importedKeys
         else listOf("hr", "oxygen", "temperature", "hrv", "breathing", "movement", "battery")
     }
     val showBackground = remember { NoopPrefs.showDayCycleBackground(context) }
@@ -117,7 +120,7 @@ fun OuraScreen(vm: AppViewModel, onDevices: () -> Unit, onImport: () -> Unit) {
             OuraControls(sources, sourceId, day, days, showRange, loading,
                 onSource = { sourceId = it }, onDay = { landedSource = sourceId; dayEpoch = it.toEpochDay() },
                 onDays = { landedSource = sourceId; days = it }, onRanges = { showRange = it },
-                onRefresh = { revision++ }, onDevices = onDevices, onImport = onImport)
+                onRefresh = { revision++ }, onDevices = onDevices, onImport = onImport, onKeys = { showKeyTransfer = true })
         }
         if (failed) item(key = "error", contentType = "status") {
             Column(verticalArrangement = Arrangement.spacedBy(Metrics.space8)) {
@@ -135,12 +138,26 @@ fun OuraScreen(vm: AppViewModel, onDevices: () -> Unit, onImport: () -> Unit) {
             }
         }
         if (snapshot != null) {
-            items(metricKeys, key = { "signal:$sourceId:$it" }, contentType = { "signal" }) { metric ->
+            item(key = "overview", contentType = "overview") {
+                OuraStatsOverview(snapshot, metricKeys, imported, tempUnit)
+            }
+            item(key = "sleep-heading", contentType = "heading") {
+                Column(verticalArrangement = Arrangement.spacedBy(Metrics.space8)) {
+                    Text(stringResource(R.string.oura_sleep), style = NoopType.headline, color = Palette.textPrimary)
+                    if (snapshot.sleeps.isEmpty()) Text(stringResource(R.string.oura_no_sleep), style = NoopType.caption, color = Palette.textSecondary)
+                }
+            }
+            items(snapshot.sleeps, key = { "sleep:${it.deviceId}:${it.startTs}" }, contentType = { "sleep" }) { sleep ->
+                OuraSleepCard(sleep)
+            }
+            if (snapshot.signals.values.any { it.count > 0 }) item(key = "charts-heading", contentType = "heading") {
+                Text(stringResource(R.string.oura_chart_details), style = NoopType.headline, color = Palette.textPrimary)
+            }
+            items(metricKeys.filter { (snapshot.signals[it]?.count ?: 0) > 0 }, key = { "signal:$sourceId:$it" }, contentType = { "signal" }) { metric ->
                 val (title, unit, note) = ouraPresentation(metric, imported, tempUnit)
-                val fahrenheit = tempUnit == TemperatureUnit.FAHRENHEIT
+                val (scale, offset) = ouraValueTransform(metric, tempUnit)
                 OuraSignalCard(title, unit, note, snapshot.signals[metric] ?: SignalDecimation.Summary(), from, to, showRange,
-                    valueScale = if (fahrenheit && metric in listOf("temperature", "skin_temp_dev_c")) 1.8 else 1.0,
-                    valueOffset = if (fahrenheit && metric == "temperature") 32.0 else 0.0,
+                    valueScale = scale, valueOffset = offset,
                     modifier = Modifier.staggeredAppear(metricKeys.indexOf(metric).coerceAtMost(3)))
             }
             item(key = "explanation", contentType = "explanation") {
@@ -155,17 +172,46 @@ fun OuraScreen(vm: AppViewModel, onDevices: () -> Unit, onImport: () -> Unit) {
                     }
                 }
             }
-            item(key = "sleep-heading", contentType = "heading") {
-                Column(verticalArrangement = Arrangement.spacedBy(Metrics.space8)) {
-                    Text(stringResource(R.string.oura_sleep), style = NoopType.headline, color = Palette.textPrimary)
-                    if (snapshot.sleeps.isEmpty()) Text(stringResource(R.string.oura_no_sleep), style = NoopType.caption, color = Palette.textSecondary)
+
+        }
+    }
+}
+
+/** Every supported metric stays on the same dashboard; missing observations remain explicitly blank. */
+@Composable
+internal fun OuraStatsOverview(data: OuraDashboardData, metricKeys: List<String>, imported: Boolean, temp: TemperatureUnit) {
+    val columns = if (LocalDensity.current.fontScale >= 1.5f) 1 else 2
+    Column(verticalArrangement = Arrangement.spacedBy(Metrics.space12)) {
+        Text(stringResource(R.string.oura_overview), style = NoopType.headline, color = Palette.textPrimary)
+        Text(stringResource(R.string.oura_overview_range), style = NoopType.caption, color = Palette.textSecondary)
+        metricKeys.chunked(columns).forEach { metrics ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Metrics.space12)) {
+                metrics.forEach { metric ->
+                    val (title, unit, note) = ouraPresentation(metric, imported, temp)
+                    val summary = data.signals[metric]
+                    val (scale, offset) = ouraValueTransform(metric, temp)
+                    val value = summary?.mean?.let { String.format(java.util.Locale.getDefault(), "%.1f", it * scale + offset) }
+                    NoopCard(Modifier.weight(1f)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(Metrics.space8)) {
+                            Text(title, style = NoopType.subhead, color = Palette.textSecondary)
+                            Text(value ?: "—", style = NoopType.title2,
+                                color = if (value != null) Palette.textPrimary else Palette.textTertiary)
+                            Text(unit, style = NoopType.captionNumber, color = Palette.textSecondary)
+                            if (value != null) Text(stringResource(R.string.explore_average), style = NoopType.caption, color = Palette.textTertiary)
+                            if (note.isNotEmpty()) Text(note, style = NoopType.caption, color = Palette.textSecondary)
+                        }
+                    }
                 }
-            }
-            items(snapshot.sleeps, key = { "sleep:${it.deviceId}:${it.startTs}" }, contentType = { "sleep" }) { sleep ->
-                OuraSleepCard(sleep)
+                if (metrics.size < columns) Spacer(Modifier.weight(1f))
             }
         }
     }
+}
+
+private fun ouraValueTransform(metric: String, temp: TemperatureUnit): Pair<Double, Double> {
+    val fahrenheit = temp == TemperatureUnit.FAHRENHEIT
+    return (if (fahrenheit && metric in listOf("temperature", "skin_temp_dev_c")) 1.8 else 1.0) to
+        (if (fahrenheit && metric == "temperature") 32.0 else 0.0)
 }
 
 @Composable
