@@ -38,6 +38,16 @@ Android presentation logic and does not change stored data or scoring.
 Tests, builds, and hardware checks remain deferred under the owner's instruction. Source review and
 `git diff --check` do not establish runtime correctness.
 
-Deferred minor: Sleep sessions share one eager card and signal cards compose eagerly. Per-session
-lazy composition may improve long-window scrolling; no performance measurement was run. New
-translations remain pending.
+## Android usability refinement
+
+The owner requested interaction and animation consistent with the rest of NOOP. Use shared controls,
+backdrop settings, and Reduce Motion-aware entrances; retain same-window data during refresh while
+keeping source/window changes isolated. Save navigation controls, render metrics/nights lazily, parse
+visible sleep timelines in the background, cache chart paths, and reserve inspection space. Fade only
+the optional range bands on a fixed domain; physiological values remain exact. Add accessible bucket
+navigation and honor the existing clock preference. Review source and update the informational draft
+PR without running tests, builds, or hardware checks.
+
+Implementation and independent source review are complete. Review follow-ups expose selected bucket
+values to TalkBack, let large-text inspection details wrap, and key pointer handlers to refreshed
+selection state. No performance measurements have been run. New translations remain pending.

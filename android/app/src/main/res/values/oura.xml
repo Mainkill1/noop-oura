@@ -55,4 +55,10 @@
     <string name="oura_hrv_note">The ring’s stored RMSSD summaries, not HRV reconstructed from banked intervals. These display values do not enable NOOP Recovery scoring.</string>
     <string name="oura_breathing_note">Experimental ring-reported rate; not a validated respiratory measurement or a scoring input.</string>
     <string name="oura_movement_note">Seconds of movement per ring window. Movement is not a step count; gaps do not mean inactivity.</string>
+    <string name="oura_one_day">1 day</string>
+    <string name="oura_window">History window</string>
+    <string name="oura_loading">Loading Oura history…</string>
+    <string name="oura_refresh_error">Refresh failed. The previously loaded readings are still shown. Retry to update them.</string>
+    <string name="oura_previous_reading">Previous reading</string>
+    <string name="oura_next_reading">Next reading</string>
 </resources>

@@ -60,5 +60,20 @@ by the fork owner. Runtime behavior has not been verified.
 The source strings have English resources; new translations remain pending. Existing Bluetooth,
 storage schema, import parsing, and scoring behavior are unchanged.
 
-Long-window rendering has not been profiled. Sleep sessions currently share one eager card, and signal
-cards also compose eagerly; per-session lazy rendering is a follow-up optimization.
+## Android interaction and motion
+
+- The page uses NOOP’s shared segmented pills, buttons, backdrop preferences, and card entrances.
+- Source, date, window, and range visibility survive configuration changes and navigation state restoration.
+- Refresh keeps the current window visible; a failed refresh labels the retained readings as previously
+  loaded. Changing source or date never displays the previous window under the new controls.
+- Rapid date/window taps are coalesced before database work. Metrics and individual sleep sessions use
+  lazy list items; visible sleep timelines are parsed off the UI thread.
+- Chart geometry is cached. Horizontal inspection uses a binary time-bucket lookup and reserved readout
+  space; it does not rebuild paths. Large text can expand rather than truncate the readout. Vertical
+  gestures remain scrolling.
+- Range bands fade over a fixed chart scale. Band and entrance motion respect Android Reduce Motion.
+  No animation interpolates physiological readings. Clock labels follow NOOP’s clock preference.
+- TalkBack exposes previous/next reading actions with exact bucket timestamps, extrema, and counts.
+
+These changes have been inspected in source, not measured on a device. Smoothness, large-font layouts,
+and TalkBack behavior still need runtime verification when testing is resumed.
