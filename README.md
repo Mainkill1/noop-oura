@@ -302,7 +302,7 @@ The app always tells you what's live now versus still building, both in onboardi
 
 ### Oura ring support
 
-This fork adds a dedicated **Oura** page under **More → Data** (Android/iPhone) and in the Mac sidebar.
+This fork adds a dedicated **Oura** page under **More → Data** in the Android app.
 It separates each ring from imported history, adds median-decimated charts with optional range bands,
 and brings oxygen, temperature, ring summaries, movement, battery, and sleep into one place.
 See [Oura dashboard](docs/OURA_DASHBOARD.md) for data coverage, graph behavior, and verification status.

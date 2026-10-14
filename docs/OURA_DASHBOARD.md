@@ -1,7 +1,7 @@
 # Oura dashboard
 
-Open **More → Data → Oura** on Android or iPhone, or **Oura** in the Mac sidebar.
-Android is the primary target for this fork's dashboard work; the Apple page follows the same data contract.
+Open **More → Data → Oura** in the Android app. This dashboard change is Android-only.
+Cracked-Oura and open_health are reference material for data presentation and functionality.
 
 Select a paired ring, **Oura export**, or **Oura API history**. Each is a separate local source:
 the page never fills an Oura gap with another ring, a WHOOP, or an import. The first visit to a source
@@ -10,7 +10,8 @@ opens its latest stored heart-rate day (ring) or daily record (import). Select a
 
 **Manage ring** opens the existing pairing and device controls. **Import history** opens the existing
 local-file import screen. **Refresh** reloads the local database; it does not initiate a Bluetooth sync
-or contact Oura. The API-history option only reads records already stored by the optional API importer.
+or contact Oura. The API-history option only reads existing local records under that source; it does
+not add an API connection to Android.
 
 ## What the page shows
 
@@ -35,7 +36,7 @@ Movement is seconds per ring window, not steps. Imported Oura scores remain refe
 - The line shows the median in each 5-minute (1 day), 1-hour (7 days), or 6-hour (30 days) bucket.
 - **Show ranges** adds the original minimum-to-maximum envelope. Extrema are also available in the
   inspected bucket and footer when the envelope is hidden.
-- Tap or drag horizontally on Android; tap or hover on Apple to inspect the bucket's time, median,
+- Tap or drag horizontally to inspect the bucket's time, median,
   extrema, and original reading count. Tapping an empty bucket clears the inspection.
 - Empty buckets break the line. Values are not interpolated across them; empty time inside a populated
   bucket is not represented at finer resolution. Use a shorter window for more detail.
@@ -55,9 +56,9 @@ imported metric coverage. [open_health](https://github.com/Th0rgal/open_health) 
 of sleep, activity, and vital signals. No reference-project implementation or assets were copied.
 
 This change is source-reviewed only. Tests, builds, and hardware exercises were explicitly deferred
-by the fork owner. Cross-platform equivalence is implemented but has not been verified by an oracle.
+by the fork owner. Runtime behavior has not been verified.
 The source strings have English resources; new translations remain pending. Existing Bluetooth,
 storage schema, import parsing, and scoring behavior are unchanged.
 
-Long-window rendering has not been profiled. Sleep sessions currently share one eager card, and Android
-also composes its signal cards eagerly; per-session lazy rendering is a follow-up optimization.
+Long-window rendering has not been profiled. Sleep sessions currently share one eager card, and signal
+cards also compose eagerly; per-session lazy rendering is a follow-up optimization.

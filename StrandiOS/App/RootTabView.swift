@@ -487,7 +487,6 @@ struct RootTabView: View {
                     MoreRow("Your Data, Fused", "square.stack.3d.up.fill", .fusedRecord)
                     MoreRow("Apple Health", "heart.fill", .appleHealth)
                     MoreRow("Mi Band", "figure.walk.motion", .miBand)
-                    MoreRow("Oura", "circle.circle", .oura)
                     MoreRow("Data Sources", "externaldrive.fill", .dataSources)
                     MoreRow("Backup & Sync", "externaldrive.fill.badge.icloud", .backupSync)
                     // #155: HealthKit-free Apple Health path for sideloaded installs (Siri Shortcut
@@ -600,7 +599,7 @@ struct RootTabView: View {
 private enum MoreDestination: Hashable {
     case insightsHub, intelligence, coach, insights, explore, compare
     case live, workouts, liftLog, health, labBook, stress, breathe, intervals, rhythm
-    case fusedRecord, appleHealth, miBand, oura, dataSources, backupSync, shortcutsExport, noopLimitations
+    case fusedRecord, appleHealth, miBand, dataSources, backupSync, shortcutsExport, noopLimitations
     case alarms, automations, testCentre, siriShortcuts, powerSaving, settings
 
     @ViewBuilder var destination: some View {
@@ -623,7 +622,6 @@ private enum MoreDestination: Hashable {
         case .fusedRecord:     FusedRecordHost()
         case .appleHealth:     AppleHealthView()
         case .miBand:          XiaomiBandView()
-        case .oura:            OuraView()
         case .dataSources:     DataSourcesView()
         case .noopLimitations: NoopLimitationsView()
         case .backupSync:      BackupSyncView()

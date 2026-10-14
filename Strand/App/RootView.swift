@@ -21,7 +21,6 @@ enum NavItem: String, CaseIterable, Identifiable, Hashable {
     case rhythm = "Rhythm"
     case appleHealth = "Apple Health"
     case xiaomi = "Mi Band"
-    case oura = "Oura"
     case dataSources = "Data Sources"
     case backupSync = "Backup & Sync"
     case fusedRecord = "Your Data, Fused"
@@ -59,7 +58,6 @@ enum NavItem: String, CaseIterable, Identifiable, Hashable {
         case .rhythm: return "Rhythm"
         case .appleHealth: return "Apple Health"
         case .xiaomi: return "Mi Band"
-        case .oura: return "Oura"
         case .dataSources: return "Data Sources"
         case .backupSync: return "Backup & Sync"
         case .fusedRecord: return "Your Data, Fused"
@@ -104,7 +102,6 @@ enum NavItem: String, CaseIterable, Identifiable, Hashable {
         case .rhythm: return String(localized: "Rhythm")
         case .appleHealth: return String(localized: "Apple Health")
         case .xiaomi: return String(localized: "Mi Band")
-        case .oura: return String(localized: "Oura")
         case .dataSources: return String(localized: "Data Sources")
         case .backupSync: return String(localized: "Backup & Sync")
         case .fusedRecord: return String(localized: "Your Data, Fused")
@@ -141,7 +138,6 @@ enum NavItem: String, CaseIterable, Identifiable, Hashable {
         case .rhythm: return "waveform.path"
         case .appleHealth: return "heart.fill"
         case .xiaomi: return "figure.walk.motion"
-        case .oura: return "circle.circle"
         case .dataSources: return "square.and.arrow.down.fill"
         case .backupSync: return "externaldrive.fill.badge.icloud"
         case .fusedRecord: return "square.stack.3d.up.fill"
@@ -185,7 +181,7 @@ struct NavGroup: Identifiable {
             .labBook, .rhythm, .trends,
         ]),
         NavGroup(title: "Data & App", id: "data_app", items: [
-            .devices, .noopLimitations, .dataSources, .appleHealth, .xiaomi, .oura, .backupSync, .fusedRecord,
+            .devices, .noopLimitations, .dataSources, .appleHealth, .xiaomi, .backupSync, .fusedRecord,
             .notifications, .automation, .smartAlarm, .powerSaving, .settings, .testCentre,
         ]),
     ]
@@ -455,7 +451,6 @@ struct RootView: View {
         case .rhythm: RhythmHost()
         case .appleHealth: AppleHealthView()
         case .xiaomi: XiaomiBandView()
-        case .oura: OuraView()
         case .dataSources: DataSourcesView()
         case .backupSync: BackupSyncView()
         case .fusedRecord: FusedRecordHost()

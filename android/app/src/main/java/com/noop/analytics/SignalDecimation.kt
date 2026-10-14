@@ -1,6 +1,6 @@
 package com.noop.analytics
 
-/** Display-only reduction; Kotlin twin of StrandAnalytics/SignalDecimation.swift. */
+/** Display-only signal reduction for charts; does not change stored data or scoring. */
 object SignalDecimation {
     data class Sample(val ts: Long, val value: Double)
     data class Bucket(
