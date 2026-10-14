@@ -17,6 +17,7 @@ data class OuraDashboardSource(val id: String, val name: String) {
 data class OuraDashboardData(
     val signals: Map<String, SignalDecimation.Summary> = emptyMap(),
     val sleeps: List<SleepSession> = emptyList(),
+    val motionWindows: List<OuraMotionWindow> = emptyList(),
 ) {
     companion object {
         val importedKeys = listOf("rhr", "hrv", "spo2", "resp_rate", "skin_temp_dev_c", "steps", "energy_kcal",
@@ -27,6 +28,7 @@ data class OuraDashboardData(
         suspend fun load(repo: WhoopRepository, source: OuraDashboardSource,
                          from: Long, to: Long, bucketSeconds: Long): OuraDashboardData = withContext(Dispatchers.Default) {
             val signals = linkedMapOf<String, SignalDecimation.Summary>()
+            val recentMotion = java.util.ArrayDeque<OuraMotionWindow>()
             val limit = 200_001
             fun <T> checked(rows: List<T>): List<T> {
                 check(rows.size < limit) { "Oura read limit reached" }
@@ -70,13 +72,21 @@ data class OuraDashboardData(
                         .mapNotNull { row -> row.soc?.let { SignalDecimation.Sample(row.ts, it) } }
                     val events = checked(repo.events(source.id, start, end - 1, limit))
                     raw["hrv"] = events.filter { it.kind == OuraStreamMapping.EVENT_HRV }.mapNotNull {
-                        val value = JSONObject(it.payloadJSON).optDouble("rmssd_ms", Double.NaN)
+                        val value = runCatching { JSONObject(it.payloadJSON).optDouble("rmssd_ms", Double.NaN) }.getOrDefault(Double.NaN)
                         if (value > 0) SignalDecimation.Sample(it.ts, value) else null
                     }
-                    raw["movement"] = events.filter { it.kind == OuraStreamMapping.EVENT_MOTION }.mapNotNull {
-                        val value = JSONObject(it.payloadJSON).optDouble("motion_seconds", Double.NaN)
-                        if (value >= 0) SignalDecimation.Sample(it.ts, value) else null
+                    val motion = events.filter { it.kind == OuraStreamMapping.EVENT_MOTION }
+                        .mapNotNull { OuraMotionWindow.parse(it.ts, it.payloadJSON) }
+                    for (record in motion) {
+                        recentMotion.addLast(record)
+                        if (recentMotion.size > 24) recentMotion.removeFirst()
                     }
+                    val motionSignals = listOf("movement", "motion_x", "motion_y", "motion_z", "motion_low", "motion_high")
+                        .associateWith { mutableListOf<SignalDecimation.Sample>() }
+                    for (record in motion) record.values().forEach { (metric, value) ->
+                        motionSignals.getValue(metric).add(SignalDecimation.Sample(record.ts, value))
+                    }
+                    raw.putAll(motionSignals)
                     for ((key, samples) in raw) signals[key] = (signals[key] ?: SignalDecimation.Summary())
                         .append(SignalDecimation.reduce(samples, start, end, bucketSeconds))
                     start = end
@@ -84,7 +94,7 @@ data class OuraDashboardData(
             }
             val sleeps = repo.sleepSessionsForDevice(source.id, from - 172_800, to - 1, 2001)
             check(sleeps.size < 2001) { "Oura sleep read limit reached" }
-            OuraDashboardData(signals, sleeps.filter { it.endTs >= from && it.endTs < to }.sortedByDescending { it.endTs })
+            OuraDashboardData(signals, sleeps.filter { it.endTs >= from && it.endTs < to }.sortedByDescending { it.endTs }, recentMotion.toList().asReversed())
         }
 
         private fun dailyValue(row: DailyMetric, key: String): Double? = when (key) {

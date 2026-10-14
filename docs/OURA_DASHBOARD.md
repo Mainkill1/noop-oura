@@ -1,155 +1,128 @@
 # Oura dashboard
 
-Tap **Oura** in the bottom navigation bar in the Android app. This dashboard change is Android-only.
-Cracked-Oura and open_health are reference material for data presentation and functionality.
+Tap **Oura** in Android’s bottom navigation. One dashboard contains **Health**, **Sleep**,
+**Movement**, and **Compare** tabs, with a sliding **Live / History** selector above them.
+The layout uses NOOP’s shared cards, segmented pills, typography, colors, and spacing.
+This dashboard update is Android-only; storage, scoring, and ring commands are unchanged.
 
-Select a paired ring, **Oura export**, or **Oura API history**. Each is a separate local source:
-the page never fills an Oura gap with another ring, a WHOOP, or an import. The first visit to a source
-opens its latest stored heart-rate day (ring) or daily record (import). Select a date and a 1-, 7-, or
-30-day window to browse history. Android's date label opens the date picker.
+## Sources and time
 
-**Manage ring** opens the existing pairing and device controls. **Import history** opens the existing
-local-file import screen. **Refresh** reloads the local database; it does not initiate a Bluetooth sync
-or contact Oura. The API-history option only reads existing local records under that source; it does
-not add an API connection to Android.
+Choose a paired Oura ring, **Oura export**, or **Oura API history**. Each is an isolated local source;
+missing readings are never filled from another ring, a WHOOP, or an import. **Manage ring** opens the
+existing device controls. **Import history** opens local-file import. **Refresh** reads the local
+database; it does not initiate Bluetooth synchronization or contact Oura. API history reads records
+already stored under that source and does not add an API connection.
 
-## What the page shows
+**History** offers one calendar date and 1/7/30-day window for the entire dashboard. The first visit
+to a source opens its latest stored heart-rate day or imported daily record. Tap the date to use the
+calendar. Category overviews show original-sample averages before detailed graphs. Missing values
+remain dashes. Graphs appear only for signals with observations. At large font sizes the overview
+uses one column. Individual plots are 220dp high; the combined plot is 320dp.
 
-| Source | Available data |
-| --- | --- |
-| Ring over Bluetooth | Heart rate, raw oxygen channel, skin temperature, ring-reported HRV summaries, experimental breathing summaries, movement, battery history, reported sleep-stage timeline |
-| Local Oura import / API history | Resting HR, HRV, blood oxygen, respiratory rate, temperature deviation, steps, active/total energy, sleep/deep/REM duration, reference readiness/sleep/activity scores, VO₂ max, stored sleep sessions |
+**Live** requires the selected ring to be the active Oura device. It shows the last 15 minutes of
+stored observations in five-second buckets. Reads run sequentially while the screen is started,
+with a five-second delay after each completed read; backgrounding stops polling and resuming refreshes
+immediately. Tiles show each sensor’s latest original observation and timestamp, and expire readings
+older than 15 minutes. They never resample a cached value to create new observations.
 
-Only metrics present in imported history appear. Bluetooth cards describe missing samples rather than
-fabricating zeros. Support depends on the ring's generation, firmware, configuration, and the records
-it actually sends; this page does not unlock additional ring features.
+A fresh-heart-rate status additionally requires connected and streaming flags plus an original HR
+sample at most 30 seconds old and not in the future. Other sensors can update less often and are
+labeled as recorded observations. Timestamp-less battery state is not graphed. Sleep sessions are
+historical; the Live Sleep tab provides a History action. Live does not send new ring commands or
+promise unsupported real-time sensors.
 
-Oxygen from Bluetooth remains **unvalidated**. The existing 50–110 display gate excludes historical
-DC-channel contamination, but values above 100 remain visible to expose unresolved calibration.
-This raw channel is separate from imported blood-oxygen percentages and from NOOP's default-off
-nightly candidate display. Ring HRV is the stored `OURA_HRV` RMSSD summary, never a reconstruction from
-banked intervals. Breathing summaries remain experimental. Neither display enables Recovery scoring.
-Movement is seconds per ring window, not steps. Imported Oura scores remain reference values.
+## Categories and movement
 
-## Chart behavior
+| Category | Ring records | Imported daily history |
+| --- | --- | --- |
+| Health | Heart rate, raw oxygen channel, skin temperature, HRV summaries, experimental breathing, timestamped battery | Resting HR, HRV, blood oxygen, breathing rate, temperature deviation, reference readiness, VO₂ max |
+| Sleep | Stored sleep sessions and stage timelines | Sleep/deep/REM durations, reference sleep score, stored sessions |
+| Movement | Motion seconds, averaged raw X/Y/Z, low/high intensity, orientation inspector | Steps, active/total energy, reference activity score |
+| Compare | Up to four numerical signals across categories | Up to four numerical signals across categories |
 
-- The line shows the median in each 5-minute (1 day), 1-hour (7 days), or 6-hour (30 days) bucket.
-- **Show ranges** adds the original minimum-to-maximum envelope. Extrema are also available in the
-  inspected bucket and footer when the envelope is hidden.
-- Tap or drag horizontally to inspect the bucket's time, median,
-  extrema, and original reading count. Tapping an empty bucket clears the inspection.
-- Empty buckets break the line. Values are not interpolated across them; empty time inside a populated
-  bucket is not represented at finer resolution. Use a shorter window for more detail.
-- Mean/min/max and reading counts use the accepted original samples, not the reduced medians.
-- Daily imports stay daily. Calendar-day windows handle daylight-saving changes, and temperature
-  respects the existing Celsius/Fahrenheit preference, including deviations without an absolute offset.
-- Raw reads run off the UI thread in bounded batches of at most 24 hours. A storage error or exceeded
-  read limit produces a retryable error instead of a silently truncated chart.
+Movement windows are existing movement-gated summaries, not continuous accelerometer samples.
+The inspector browses the latest 24 recorded windows. X/Y/Z are signed-byte values multiplied by eight
+by the existing decoder, with no validated conversion to g. Intensity remains unscaled. Orientation
+is a categorical code from 0 through 7 and is never averaged or offered as a numerical graph.
+Missing optional fields remain missing. No movement magnitude, METs, calories, activity classification,
+or sleep staging is derived from these fields. Imported steps and energy retain their own units.
 
-The Android Deep Timeline also accepts the ring's single-channel oxygen samples, matching the existing
-Apple behavior; it previously dropped every row with an absent infrared channel.
+Ring oxygen remains **unvalidated**. The existing 50–110 display gate excludes historical DC-channel
+contamination; values above 100 remain visible to expose unresolved calibration. This raw channel is
+separate from imported blood-oxygen percentages and NOOP’s default-off nightly candidate. Ring HRV
+is the stored `OURA_HRV` RMSSD summary. Breathing remains experimental. These displays do not enable
+Recovery scoring. Imported Oura scores remain reference values. Availability depends on the ring’s
+firmware, configuration, and actual records.
 
-## References and verification status
+## Graphs and comparison
 
-[Cracked-Oura](https://github.com/EIrno/Cracked-Oura) informed the dedicated local-data overview and
-imported metric coverage. [open_health](https://github.com/Th0rgal/open_health) informed the separation
-of sleep, activity, and vital signals. No reference-project implementation or assets were copied.
+- Historical ring plots use median buckets: five minutes for one day, one hour for seven days, and
+  six hours for 30 days. Imports remain daily, including daylight-saving calendar boundaries.
+- **Show ranges** adds min/max bands on individual plots. Original-sample means, extrema, and counts
+  remain independent of bucket medians and range visibility.
+- **Compare** accepts zero to four signals. A fifth choice is disabled until one is removed; existing
+  choices are retained. All traces use the same source and bottom time axis.
+- Compatible quantities and units share a domain, such as raw X/Y/Z. Heart rate and temperature use
+  separate, explicitly labeled scales with visible bounds. Absolute and relative temperature, raw
+  oxygen, blood-oxygen percentages, charge, and intensity remain distinct. There is no unlabeled
+  normalization. Celsius/Fahrenheit and 12/24-hour labels follow app preferences.
+- Colors, labels, and distinct stroke patterns identify combined traces. Tap or drag horizontally to
+  inspect all selected signals at the same time. Each readout shows its actual containing bucket’s
+  median, extrema, reading count, and time interval, or a dash when that time has no bucket.
+- Empty buckets break lines. Inspection never snaps across gaps or interpolates missing values.
+  A bucket median is not claimed to be an original sample at the plotted midpoint.
+- Accessibility actions provide previous/next reading inspection. Large text wraps details; vertical
+  gestures continue scrolling. Individual chart range and entrance motion respect Reduce Motion.
+- Reads run off the UI thread with bounded batches. A failed refresh labels retained readings;
+  changing source or interval immediately hides the previous window. Cancellation and generation
+  checks prevent obsolete reads from publishing. Malformed movement fields are rejected individually.
 
-Device verification resumed on 2026-10-14 using a OnePlus 9 Pro (LE2125), Android 16 / API 36,
-over wireless ADB. The Full debug app built and installed successfully. Seven instrumentation tests
-exercise real Room reads and Compose UI using synthetic records:
+Ring credential transfer remains available under the toolbar’s **More → Transfer ring keys**.
+See [Oura key transfer](OURA_KEY_TRANSFER.md).
 
-- Ring/source isolation, exclusive time boundaries, accepted single-channel oxygen, and temperature scaling.
-- Imported metric precedence and a 23-hour daylight-saving calendar day.
-- Chart taps and horizontal scrubbing, missing-bucket clearing, and exact-value accessibility actions.
-- Source/window/range controls at 200% font scale.
-- Dashboard loading, refresh, and saved-state restoration.
-- Sleep totals and timeline clipping to the same edited session, plus summary-only imported sleep.
+## Plan review and verification
 
-Full and Demo debug APKs build successfully. Each JVM suite reports 6,687 tests, zero failures/errors,
-and six existing skips. The diff-scoped localization audit, doc-comment lint, and `git diff --check` pass.
-Full and Demo staging-release assembly and vital lint also pass. Combined release lint exhausted the
-default 2 GB Gradle heap; the successful local run used
-`-PstagingRelease -Dorg.gradle.jvmargs="-Xmx4096m -Dfile.encoding=UTF-8" --max-workers=2`.
+Before implementation, public guides and screenshots from
+[Cracked-Oura](https://github.com/EIrno/Cracked-Oura) and
+[open_health](https://github.com/Th0rgal/open_health) were reviewed for overview, category navigation,
+and time-aligned signal presentation. The four-signal overlay and Live mode are requirements for NOOP,
+not attributed features of those references. An independent plan review resolved freshness, units,
+categorical orientation, bucket provenance, bounds, and lifecycle behavior. No external implementation,
+assets, styles, or copy were reused. Source snapshots and the independent specification are recorded in
+[the explorer design note](superpowers/specs/2026-10-14-oura-explorer.md).
 
-The sleep regression first failed on the phone (15 reported minutes for a 10-minute visible interval)
-and passed after the fix. JVM coverage also checks medians, original-sample statistics, missing buckets,
-nonfinite samples, and batch equivalence. Test screenshots use synthetic data and remain build artifacts.
-The instrumentation dependencies use Espresso 3.7.0 and AndroidX JUnit 1.3.0 for Android 16 compatibility;
-dependency locks and verified checksums are committed.
+Full and Demo debug builds and the Full JVM suite pass: 6,706 tests, zero failures/errors, six existing
+skips. The suite includes selection limits, compatible/incompatible scales, Fahrenheit conversion,
+finite domains, exact gap lookup, original latest values, freshness, bucket alignment, stop/resume,
+serial slow polling, obsolete-source cancellation, and clock preferences. Localization checks cover
+English, German, Spanish, French, and European Portuguese; doc-comment and diff checks pass.
 
-The source strings have English resources; new translations remain pending. Existing Bluetooth,
-storage schema, import parsing, and scoring behavior are unchanged.
+Device verification uses a OnePlus 9 Pro (LE2125), Android 16/API 36, over wireless ADB.
+All 18 explorer, dashboard, and key-transfer instrumentation checks pass. They cover the sliding mode
+selector, category tabs, four-signal limit, saved selections, shared gap inspection, movement parsing,
+source isolation, large text, navigation, sleep clipping, and existing XML/credential behavior.
+Populated comparison and movement screenshots were visually inspected. Tests use synthetic in-memory
+records and production Compose components; they do not validate live
+ring collection, calibration, or spoken TalkBack. The standalone root-exporter grant remains outside
+this dashboard change’s verification.
 
-### Reproducing the device checks
+### Reproducing checks
 
 From `android/`, with the SDK and JDK configured:
 
 ```sh
-./gradlew assembleFullDebug testFullDebugUnitTest --no-build-cache --rerun-tasks
-./gradlew assembleFullDebugAndroidTest
+./gradlew assembleFullDebug assembleDemoDebug testFullDebugUnitTest --max-workers=2
+./gradlew assembleFullDebugAndroidTest --max-workers=2
 adb -s DEVICE_SERIAL install -r app/build/outputs/apk/full/debug/app-full-debug.apk
 adb -s DEVICE_SERIAL install -r app/build/outputs/apk/androidTest/full/debug/app-full-debug-androidTest.apk
 adb -s DEVICE_SERIAL shell am instrument -w -r \
-  -e class com.noop.ui.OuraDashboardDeviceTest \
+  -e class com.noop.ui.OuraExplorerDeviceTest,com.noop.ui.OuraDashboardDeviceTest,com.noop.ui.OuraKeyTransferDeviceTest \
   com.noop.whoop.debug.test/androidx.test.runner.AndroidJUnitRunner
 ```
 
-Keep JVM tests and instrumentation assembly in separate Gradle invocations: test-source KSP can
-invalidate the Room schema export in a combined invocation. The direct ADB runner was used because
-AGP 8.5.2's connected-device discovery threw a host-side null-pointer exception for this wireless device.
-Check the runner's `OK (9 tests)` summary; the ADB process exit status alone does not establish success.
-Screenshots are saved in the debug app's external-files `oura-test-evidence` directory.
-
-## Android interaction and motion
-
-- The page uses NOOP’s shared segmented pills, buttons, backdrop preferences, and card entrances.
-- Source, date, window, and range visibility survive configuration changes and navigation state restoration.
-- Refresh keeps the current window visible; a failed refresh labels the retained readings as previously
-  loaded. Changing source or date never displays the previous window under the new controls.
-- Rapid date/window taps are coalesced before database work. Metrics and individual sleep sessions use
-  lazy list items; visible sleep timelines are parsed off the UI thread.
-- Chart geometry is cached. Horizontal inspection uses a binary time-bucket lookup and an expanding detail
-  panel; it does not rebuild paths. Large text can expand rather than truncate the readout. Vertical
-  gestures remain scrolling.
-- Range bands fade over a fixed chart scale. Band and entrance motion respect Android Reduce Motion.
-  No animation interpolates physiological readings. Clock labels follow NOOP’s clock preference.
-- TalkBack exposes previous/next reading actions with exact bucket timestamps, extrema, and counts.
-
-The tested large-font controls and chart inspection rendered successfully on the phone. Accessibility
-actions were invoked through Compose semantics; spoken TalkBack navigation has not been verified.
-Large-history scrolling performance, error/refresh races, live ring collection, and calibration remain
-outside this device run. No real biometric data or Bluetooth ring commands were used by the tests.
-
-### Dashboard visual polish
-
-The source toolbar groups ring management and import under More. Date navigation, window selection,
-and range visibility remain directly available. Metric cards lead with the original-sample average,
-use compact charts, and present minimum and maximum separately. Dense traces omit redundant dots;
-isolated readings and gaps remain visible. Selection adds a focus marker and reveals exact details.
-Chart methodology follows the readings rather than delaying the first metric.
-
-Full and Demo debug builds and eight device tests validate this UI revision. The device suite includes
-a populated synthetic dashboard fixture and 200% text controls on a historical date, with Today visible.
-Screenshots use Compose capture to wait for rendered content. All styling uses shared design tokens.
-
-### Navigation
-
-Oura is a primary tab alongside Today, Trends, Sleep, and More. Coach is available in More → Insights,
-subject to its existing enable setting. Navigation stays visible by default; users can explicitly enable
-Hide bar when scrolling in Settings. Existing explicit preferences are respected.
-The device suite exercises AppRoot → Oura, rather than only mounting the dashboard in isolation.
-
-Navigation verification: Full and Demo debug builds, 63 focused navigation/Coach JVM tests, and all
-nine dashboard device tests pass. The installed app was also opened through its visible Oura tab.
-
-### One Oura dashboard
-
-The Oura tab opens a compact overview of every supported statistic for the selected source, then
-sleep sessions and detailed graphs on the same scrolling page. The single 1/7/30-day selector changes
-the date range for all of them. Overview values are original-sample averages, and missing readings
-remain dashes rather than hiding metrics or showing zeros. Graph cards appear only where readings
-exist. At enlarged text sizes the overview uses one column so labels and values can wrap.
-
-Ring credential transfer is available from the dashboard toolbar’s More menu. See
-[Oura key transfer](OURA_KEY_TRANSFER.md) for the standalone root exporter and XML import flow.
+Keep JVM tests and instrumentation assembly in separate invocations: test-source KSP can invalidate
+Room’s schema export in a combined task graph. Regenerate with `--no-build-cache --rerun-tasks` if the
+schema-oracle directory is missing. Direct ADB instrumentation avoids AGP 8.5.2’s host-side wireless
+discovery null-pointer error. Require the runner’s `OK` summary; shell exit status alone is insufficient.
+Screenshots use Compose capture and remain build artifacts under the app’s external-files
+`oura-test-evidence` directory. No real biometric data is inserted by these tests.

@@ -230,6 +230,18 @@ class OuraDashboardDeviceTest {
             compose.onNodeWithContentDescription("Refresh").performScrollTo().performClick()
             compose.onNodeWithText("Oura export").assertExists()
             captureEvidence("dashboard-empty")
+            compose.onNodeWithText("Movement").performScrollTo().performClick()
+            compose.onNodeWithText("Live").performScrollTo().performClick()
+            restoration.emulateSavedInstanceStateRestore()
+            compose.onNodeWithText("Live").performScrollTo().assertIsSelected()
+            compose.onNodeWithText("Movement").assertIsSelected()
+            compose.onNodeWithText("30 days").assertDoesNotExist()
+            compose.waitUntil(10_000) {
+                compose.onAllNodesWithText("Oura export").fetchSemanticsNodes().isNotEmpty()
+            }
+            compose.onAllNodesWithText("History").onFirst().performClick()
+            compose.onNodeWithText("30 days").performScrollTo().assertIsSelected()
+            compose.onNodeWithText("Show ranges").performScrollTo().assertIsOn()
         } finally { compose.runOnIdle { store.clear() } }
     }
 

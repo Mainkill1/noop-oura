@@ -1,0 +1,30 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+  <string name="oura_history">Historial</string>
+  <string name="oura_view_mode">En directo o historial</string>
+  <string name="oura_tab_movement">Movimiento</string>
+  <string name="oura_live_requires_ring">El modo en directo requiere que el anillo seleccionado sea el dispositivo Oura activo.</string>
+  <string name="oura_live_disconnected">Anillo desconectado</string>
+  <string name="oura_live_fresh">Flujo reciente de frecuencia cardíaca</string>
+  <string name="oura_live_waiting">Esperando una frecuencia cardíaca reciente</string>
+  <string name="oura_live_info">Los últimos 15 minutos se actualizan cada cinco segundos. Los demás sensores muestran su última lectura registrada y pueden actualizarse con menos frecuencia.</string>
+  <string name="oura_sleep_history">Las sesiones de sueño están disponibles en Historial.</string>
+  <string name="oura_latest_recorded_info">Últimos valores registrados, con la hora de lectura. Los valores ausentes no tienen lecturas en los últimos 15 minutos.</string>
+  <string name="oura_bucket_width_seconds">Intervalos de mediana: %1$d segundos</string>
+  <string name="oura_motion_seconds">Segundos de movimiento</string>
+  <string name="oura_motion_x">Eje X</string>
+  <string name="oura_motion_y">Eje Y</string>
+  <string name="oura_motion_z">Eje Z</string>
+  <string name="oura_motion_low">Intensidad baja</string>
+  <string name="oura_motion_high">Intensidad alta</string>
+  <string name="oura_motion_orientation">Código de orientación</string>
+  <string name="oura_raw_unit">sin escalar</string>
+  <string name="oura_motion_details">Intervalos de movimiento</string>
+  <string name="oura_motion_info">Resúmenes de movimiento registrados por el anillo, no aceleración continua. X/Y/Z son promedios sin procesar ×8; la intensidad no está escalada. La orientación es un código de categoría.</string>
+  <string name="oura_motion_recent">Últimos %1$d intervalos registrados</string>
+  <string name="oura_compare_title">Gráfica combinada</string>
+  <string name="oura_compare_info">Superpón hasta cuatro señales. Las líneas muestran medianas por intervalo. Las magnitudes compatibles comparten escala; las demás unidades tienen escalas etiquetadas separadas.</string>
+  <string name="oura_compare_count">%1$d de 4 seleccionadas</string>
+  <string name="oura_compare_choose">Selecciona señales para comparar.</string>
+  <string name="oura_compare_bounds">%1$s – %2$s %3$s</string>
+</resources>

@@ -85,14 +85,14 @@ internal fun OuraSignalCard(
                     Text(stringResource(R.string.explore_average), style = NoopType.caption, color = Palette.textSecondary)
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Metrics.space8)) {
-                    Column(Modifier.width(Metrics.chartAxisLabelWidth).height(Metrics.compactChartHeight), verticalArrangement = Arrangement.SpaceBetween) {
+                    Column(Modifier.width(Metrics.chartAxisLabelWidth).height(Metrics.chartHeight), verticalArrangement = Arrangement.SpaceBetween) {
                         Text(String.format(locale, "%.1f", domain.second), style = NoopType.captionNumber, color = Palette.textSecondary,
                             maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text(String.format(locale, "%.1f", domain.first), style = NoopType.captionNumber, color = Palette.textSecondary,
                             maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     OuraSignalPlot(buckets, from, to, domain.first, domain.second, valueScale, valueOffset,
-                        showRange, selected, "$title: $description", accessibleBuckets, Modifier.weight(1f).height(Metrics.compactChartHeight))
+                        showRange, selected, "$title: $description", accessibleBuckets, Modifier.weight(1f).height(Metrics.chartHeight))
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Metrics.space8)) {
                     Text(axisFormat.format(Instant.ofEpochSecond(from)), Modifier.weight(1f), style = NoopType.caption, color = Palette.textSecondary)
@@ -147,14 +147,14 @@ private fun OuraSignalPlot(
         .pointerInput(buckets, from, to, selected) {
             fun inspect(x: Float) {
                 val ts = from + (x / size.width.coerceAtLeast(1) * (to - from)).toLong()
-                selected.intValue = bucketAt(buckets, ts)
+                selected.intValue = com.noop.analytics.OuraComparison.indexAt(buckets, ts)
             }
             detectTapGestures { inspect(it.x) }
         }
         .pointerInput(buckets, from, to, selected) {
             fun inspect(x: Float) {
                 val ts = from + (x / size.width.coerceAtLeast(1) * (to - from)).toLong()
-                selected.intValue = bucketAt(buckets, ts)
+                selected.intValue = com.noop.analytics.OuraComparison.indexAt(buckets, ts)
             }
             detectHorizontalDragGestures(onDragStart = { inspect(it.x) }) { change, _ ->
                 change.consume()
@@ -198,22 +198,6 @@ private fun OuraSignalPlot(
                 }
             }
         })
-}
-
-/** Binary lookup preserves empty time buckets instead of snapping across missing data. */
-private fun bucketAt(buckets: List<SignalDecimation.Bucket>, ts: Long): Int {
-    var low = 0
-    var high = buckets.lastIndex
-    while (low <= high) {
-        val mid = (low + high) ushr 1
-        val bucket = buckets[mid]
-        when {
-            ts < bucket.start -> high = mid - 1
-            ts >= bucket.end -> low = mid + 1
-            else -> return mid
-        }
-    }
-    return -1
 }
 
 @Composable

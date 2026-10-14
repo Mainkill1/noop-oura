@@ -9,7 +9,7 @@ object SignalDecimation {
     )
     data class Summary(
         val buckets: List<Bucket> = emptyList(), val count: Int = 0, val sum: Double = 0.0,
-        val minimum: Double? = null, val maximum: Double? = null, val latestTs: Long? = null,
+        val minimum: Double? = null, val maximum: Double? = null, val latestTs: Long? = null, val latestValue: Double? = null,
     ) {
         val mean: Double? get() = if (count > 0) sum / count else null
 
@@ -19,6 +19,7 @@ object SignalDecimation {
             listOfNotNull(minimum, other.minimum).minOrNull(),
             listOfNotNull(maximum, other.maximum).maxOrNull(),
             listOfNotNull(latestTs, other.latestTs).maxOrNull(),
+            if (other.latestTs != null && (latestTs == null || other.latestTs >= latestTs)) other.latestValue else latestValue,
         )
     }
 
@@ -35,6 +36,7 @@ object SignalDecimation {
                 Bucket(start, minOf(to, start + width), median, sorted.first(), sorted.last(), sorted.size)
             }
         return Summary(buckets, valid.size, valid.sumOf { it.value },
-            valid.minOfOrNull { it.value }, valid.maxOfOrNull { it.value }, valid.maxOfOrNull { it.ts })
+            valid.minOfOrNull { it.value }, valid.maxOfOrNull { it.value }, valid.maxOfOrNull { it.ts },
+            valid.maxByOrNull { it.ts }?.value)
     }
 }

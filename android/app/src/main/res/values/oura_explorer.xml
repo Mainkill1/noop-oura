@@ -1,0 +1,30 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+  <string name="oura_history">History</string>
+  <string name="oura_view_mode">Live or history</string>
+  <string name="oura_tab_movement">Movement</string>
+  <string name="oura_live_requires_ring">Live requires the selected ring to be the active Oura device.</string>
+  <string name="oura_live_disconnected">Ring disconnected</string>
+  <string name="oura_live_fresh">Fresh heart rate stream</string>
+  <string name="oura_live_waiting">Waiting for fresh heart rate</string>
+  <string name="oura_live_info">The last 15 minutes update every five seconds. Other sensors show their latest recorded observation and may update less often.</string>
+  <string name="oura_sleep_history">Sleep sessions are available in History.</string>
+  <string name="oura_latest_recorded_info">Latest recorded values, with observation times. Missing values have no reading in the last 15 minutes.</string>
+  <string name="oura_bucket_width_seconds">Median buckets: %1$d seconds</string>
+  <string name="oura_motion_seconds">Movement seconds</string>
+  <string name="oura_motion_x">X axis</string>
+  <string name="oura_motion_y">Y axis</string>
+  <string name="oura_motion_z">Z axis</string>
+  <string name="oura_motion_low">Low intensity</string>
+  <string name="oura_motion_high">High intensity</string>
+  <string name="oura_motion_orientation">Orientation code</string>
+  <string name="oura_raw_unit">raw</string>
+  <string name="oura_motion_details">Movement windows</string>
+  <string name="oura_motion_info">Ring-recorded movement summaries, not continuous acceleration. X/Y/Z are raw averaged values ×8; intensity is unscaled. Orientation is a categorical code.</string>
+  <string name="oura_motion_recent">Latest %1$d recorded windows</string>
+  <string name="oura_compare_title">Combined graph</string>
+  <string name="oura_compare_info">Overlay up to four signals. Lines show bucket medians. Matching quantities share a scale; other units have separate labeled scales.</string>
+  <string name="oura_compare_count">%1$d of 4 selected</string>
+  <string name="oura_compare_choose">Select signals to compare.</string>
+  <string name="oura_compare_bounds">%1$s – %2$s %3$s</string>
+</resources>

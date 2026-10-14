@@ -1,0 +1,30 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+  <string name="oura_history">Verlauf</string>
+  <string name="oura_view_mode">Live oder Verlauf</string>
+  <string name="oura_tab_movement">Bewegung</string>
+  <string name="oura_live_requires_ring">Live erfordert, dass der ausgewählte Ring das aktive Oura-Gerät ist.</string>
+  <string name="oura_live_disconnected">Ring getrennt</string>
+  <string name="oura_live_fresh">Frischer Herzfrequenz-Stream</string>
+  <string name="oura_live_waiting">Warten auf aktuelle Herzfrequenz</string>
+  <string name="oura_live_info">Die letzten 15 Minuten werden alle fünf Sekunden aktualisiert. Andere Sensoren zeigen ihre letzte aufgezeichnete Messung und können seltener aktualisiert werden.</string>
+  <string name="oura_sleep_history">Schlafsitzungen sind im Verlauf verfügbar.</string>
+  <string name="oura_latest_recorded_info">Zuletzt aufgezeichnete Werte mit Messzeiten. Fehlende Werte haben keine Messung in den letzten 15 Minuten.</string>
+  <string name="oura_bucket_width_seconds">Medianintervalle: %1$d Sekunden</string>
+  <string name="oura_motion_seconds">Bewegungssekunden</string>
+  <string name="oura_motion_x">X-Achse</string>
+  <string name="oura_motion_y">Y-Achse</string>
+  <string name="oura_motion_z">Z-Achse</string>
+  <string name="oura_motion_low">Niedrige Intensität</string>
+  <string name="oura_motion_high">Hohe Intensität</string>
+  <string name="oura_motion_orientation">Orientierungscode</string>
+  <string name="oura_raw_unit">roh</string>
+  <string name="oura_motion_details">Bewegungsintervalle</string>
+  <string name="oura_motion_info">Vom Ring aufgezeichnete Bewegungszusammenfassungen, keine kontinuierliche Beschleunigung. X/Y/Z sind rohe Mittelwerte ×8; Intensität ist unskaliert. Orientierung ist ein Kategoriecode.</string>
+  <string name="oura_motion_recent">Letzte %1$d aufgezeichnete Intervalle</string>
+  <string name="oura_compare_title">Kombiniertes Diagramm</string>
+  <string name="oura_compare_info">Bis zu vier Signale überlagern. Linien zeigen Intervallmediane. Gleiche Größen teilen eine Skala; andere Einheiten haben getrennte beschriftete Skalen.</string>
+  <string name="oura_compare_count">%1$d von 4 ausgewählt</string>
+  <string name="oura_compare_choose">Signale zum Vergleichen auswählen.</string>
+  <string name="oura_compare_bounds">%1$s – %2$s %3$s</string>
+</resources>

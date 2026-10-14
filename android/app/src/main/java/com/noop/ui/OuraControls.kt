@@ -29,7 +29,7 @@ internal fun OuraControls(
     showRange: Boolean, loading: Boolean,
     onSource: (String) -> Unit, onDay: (LocalDate) -> Unit, onDays: (Int) -> Unit,
     onRanges: (Boolean) -> Unit, onRefresh: () -> Unit, onDevices: () -> Unit, onImport: () -> Unit,
-    onKeys: () -> Unit = {},
+    onKeys: () -> Unit = {}, isLive: Boolean = false,
 ) {
     val context = LocalContext.current
     var sourceMenu by remember { mutableStateOf(false) }
@@ -67,32 +67,34 @@ internal fun OuraControls(
                     }
                 }
             }
-            HorizontalDivider(color = Palette.hairline)
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = { onDay(day.minusDays(days.toLong())) }) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.oura_previous))
+            if (!isLive) {
+                HorizontalDivider(color = Palette.hairline)
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = { onDay(day.minusDays(days.toLong())) }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.oura_previous))
+                    }
+                    TextButton(modifier = Modifier.weight(1f), onClick = {
+                        DatePickerDialog(context, { _, year, month, date -> onDay(LocalDate.of(year, month + 1, date)) },
+                            day.year, day.monthValue - 1, day.dayOfMonth).apply {
+                            datePicker.maxDate = System.currentTimeMillis()
+                        }.show()
+                    }) {
+                        Text(day.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)), style = NoopType.bodyNumber,
+                            color = Palette.textPrimary)
+                    }
+                    IconButton(onClick = { onDay(minOf(day.plusDays(days.toLong()), LocalDate.now())) }, enabled = day < LocalDate.now()) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = stringResource(R.string.oura_next))
+                    }
                 }
-                TextButton(modifier = Modifier.weight(1f), onClick = {
-                    DatePickerDialog(context, { _, year, month, date -> onDay(LocalDate.of(year, month + 1, date)) },
-                        day.year, day.monthValue - 1, day.dayOfMonth).apply {
-                        datePicker.maxDate = System.currentTimeMillis()
-                    }.show()
-                }) {
-                    Text(day.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)), style = NoopType.bodyNumber,
-                        color = Palette.textPrimary)
-                }
-                IconButton(onClick = { onDay(minOf(day.plusDays(days.toLong()), LocalDate.now())) }, enabled = day < LocalDate.now()) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = stringResource(R.string.oura_next))
-                }
+                SegmentedPillControl(items = listOf(1, 7, 30), selection = days,
+                    label = { context.getString(if (it == 1) R.string.oura_one_day else R.string.oura_days, it) },
+                    onSelect = onDays, adaptsToAvailableWidth = true, modifier = Modifier.fillMaxWidth(),
+                    accessibilityLabel = stringResource(R.string.oura_window))
+                if (days > 1) Text(
+                    day.minusDays(days.toLong() - 1).format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)) +
+                        " – " + day.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)),
+                    style = NoopType.captionNumber, color = Palette.textSecondary)
             }
-            SegmentedPillControl(items = listOf(1, 7, 30), selection = days,
-                label = { context.getString(if (it == 1) R.string.oura_one_day else R.string.oura_days, it) },
-                onSelect = onDays, adaptsToAvailableWidth = true, modifier = Modifier.fillMaxWidth(),
-                accessibilityLabel = stringResource(R.string.oura_window))
-            if (days > 1) Text(
-                day.minusDays(days.toLong() - 1).format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)) +
-                    " – " + day.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)),
-                style = NoopType.captionNumber, color = Palette.textSecondary)
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Row(Modifier.weight(1f).toggleable(value = showRange, role = Role.Switch, onValueChange = onRanges),
                     verticalAlignment = Alignment.CenterVertically,
@@ -100,7 +102,7 @@ internal fun OuraControls(
                     Switch(checked = showRange, onCheckedChange = null)
                     Text(stringResource(R.string.oura_show_ranges), style = NoopType.caption, color = Palette.textSecondary)
                 }
-                if (day != LocalDate.now()) TextButton(onClick = { onDay(LocalDate.now()) }) {
+                if (!isLive && day != LocalDate.now()) TextButton(onClick = { onDay(LocalDate.now()) }) {
                     Text(stringResource(R.string.oura_today))
                 }
             }
