@@ -1,6 +1,6 @@
 # Oura dashboard
 
-Open **More → Data → Oura** in the Android app. This dashboard change is Android-only.
+Tap **Oura** in the bottom navigation bar in the Android app. This dashboard change is Android-only.
 Cracked-Oura and open_health are reference material for data presentation and functionality.
 
 Select a paired ring, **Oura export**, or **Oura API history**. Each is a separate local source:
@@ -98,7 +98,7 @@ adb -s DEVICE_SERIAL shell am instrument -w -r \
 Keep JVM tests and instrumentation assembly in separate Gradle invocations: test-source KSP can
 invalidate the Room schema export in a combined invocation. The direct ADB runner was used because
 AGP 8.5.2's connected-device discovery threw a host-side null-pointer exception for this wireless device.
-Check the runner's `OK (8 tests)` summary; the ADB process exit status alone does not establish success.
+Check the runner's `OK (9 tests)` summary; the ADB process exit status alone does not establish success.
 Screenshots are saved in the debug app's external-files `oura-test-evidence` directory.
 
 ## Android interaction and motion
@@ -132,3 +132,13 @@ Chart methodology follows the readings rather than delaying the first metric.
 Full and Demo debug builds and eight device tests validate this UI revision. The device suite includes
 a populated synthetic dashboard fixture and 200% text controls on a historical date, with Today visible.
 Screenshots use Compose capture to wait for rendered content. All styling uses shared design tokens.
+
+### Navigation
+
+Oura is a primary tab alongside Today, Trends, Sleep, and More. Coach is available in More → Insights,
+subject to its existing enable setting. Navigation stays visible by default; users can explicitly enable
+Hide bar when scrolling in Settings. Existing explicit preferences are respected.
+The device suite exercises AppRoot → Oura, rather than only mounting the dashboard in isolation.
+
+Navigation verification: Full and Demo debug builds, 63 focused navigation/Coach JVM tests, and all
+nine dashboard device tests pass. The installed app was also opened through its visible Oura tab.

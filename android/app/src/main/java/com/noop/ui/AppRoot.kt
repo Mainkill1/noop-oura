@@ -230,15 +230,10 @@ internal data class DrawerGroup(
     val defaultExpanded: Boolean,
 )
 
-// Mirrors the iOS RootTabView `moreTab` grouping + order one-for-one. Today / Trends / Sleep / Coach
-// are NOT listed (they're bottom-bar tabs, exactly as on iOS). Android-only screens (Vital Signs, Wake
-// Window, Notifications, Devices) are slotted into the matching iOS group.
+// Primary tabs are omitted from More. Coach remains available in Insights.
 internal val drawerGroups: List<DrawerGroup> = listOf(
     DrawerGroup("Insights", R.string.more_group_insights, listOf(
-        // Coach is a bottom-bar tab now and is deliberately absent here, matching iOS: "K3: Coach
-        // promoted to a top-level tab — no longer listed under More." Leaving it would have put the
-        // same destination in two places at once, which is the duplication the note above says this
-        // list exists to avoid. (#2218)
+        Destination.Coach,
         Destination.InsightsHub, Destination.Intelligence,
         Destination.Insights, Destination.Explore, Destination.Compare,
     ), defaultExpanded = true),
@@ -248,7 +243,7 @@ internal val drawerGroups: List<DrawerGroup> = listOf(
         Destination.Rhythm,
     ), defaultExpanded = true),
     DrawerGroup("Data", R.string.more_group_data, listOf(
-        Destination.FusedRecord, Destination.AppleHealth, Destination.Oura, Destination.DataSources,
+        Destination.FusedRecord, Destination.AppleHealth, Destination.DataSources,
         Destination.BackupSync, Destination.Devices, Destination.NoopLimitations,
     ), defaultExpanded = false),
     DrawerGroup("App", R.string.more_group_app, listOf(
@@ -434,8 +429,8 @@ object BottomBarStyleStore {
             .putFloat(NoopPrefs.KEY_BOTTOM_BAR_SCALE, clamped).apply()
     }
 
-    /** #1839: hide the overlay bar while scrolling down, bring it back on scrolling up. Default ON. */
-    var autoHide by mutableStateOf(true)
+    /** #1839: hide the overlay bar while scrolling down, bring it back on scrolling up. Default OFF so navigation remains discoverable. */
+    var autoHide by mutableStateOf(false)
         private set
 
     fun setAutoHide(ctx: Context, value: Boolean) {
@@ -483,7 +478,7 @@ object BottomBarStyleStore {
     fun load(ctx: Context) {
         val prefs = NoopPrefs.of(ctx.applicationContext)
         overlay = prefs.getBoolean(NoopPrefs.KEY_OVERLAY_BOTTOM_BAR, true)
-        autoHide = prefs.getBoolean(NoopPrefs.KEY_BOTTOM_BAR_AUTO_HIDE, true)
+        autoHide = prefs.getBoolean(NoopPrefs.KEY_BOTTOM_BAR_AUTO_HIDE, false)
         coachEnabled = NoopPrefs.coachEnabled(ctx.applicationContext)
         // Both are read through the same clamps the setters use, so a hand-edited or downgraded pref
         // cannot put the bar in a state the UI has no way to leave.
@@ -500,7 +495,7 @@ object BottomBarStyleStore {
 }
 
 /**
- * App shell: a single [Scaffold] with a floating [GlassBottomBar] (Today · Trends · Sleep · Coach · More)
+ * App shell: a single [Scaffold] with a floating [GlassBottomBar] (Today · Oura · Trends · Sleep · More)
  * driving one [NavHost], mirroring the iOS RootTabView. There is NO global toolbar and no nav drawer
  * — every screen self-titles via [ScreenScaffold], and the "More" sheet (opened from the bar) reaches
  * every destination in [drawerGroups], so nothing is lost. A single [AppViewModel] is created here and
@@ -1024,9 +1019,10 @@ private fun MoreScreen(onNavigate: (String) -> Unit) {
                 if (isOpen) {
                     NoopCard(padding = 0.dp) {
                         Column(modifier = Modifier.fillMaxWidth()) {
-                            group.items.forEachIndexed { i, dest ->
+                            val visibleItems = moreDestinationsFor(group.items, BottomBarStyleStore.coachEnabled)
+                            visibleItems.forEachIndexed { i, dest ->
                                 MoreRow(dest = dest, onClick = { onNavigate(dest.route) })
-                                if (i < group.items.lastIndex) {
+                                if (i < visibleItems.lastIndex) {
                                     HorizontalDivider(
                                         color = Palette.hairline,
                                         modifier = Modifier.padding(start = 50.dp),
@@ -1110,35 +1106,21 @@ private fun MoreRow(dest: Destination, onClick: () -> Unit) {
 /** A single bottom-bar nav slot: the destination it switches to, plus the bar-specific icon/label. */
 internal data class BarTab(val dest: Destination, val icon: ImageVector, @StringRes val labelRes: Int)
 
-/** The nav slots in iOS order: Today · Trends · Sleep · Coach · More.
- *  More is special-cased (it opens the sheet rather than a route), so it is appended at the call site. */
+/** Primary navigation keeps Oura one tap away from every app screen. More is appended by the bar. */
 internal val barLeadingTabs = listOf(
     BarTab(Destination.Today, Icons.Outlined.GridView, R.string.nav_today),
-    // chart.line.uptrend.xyaxis on iOS — the rising-trend glyph, not a flat bar chart.
-    BarTab(Destination.Trends, Icons.AutoMirrored.Filled.TrendingUp, R.string.nav_trends),
-)
-/**
- * The trailing tabs, as shipped. [barTrailingTabsFor] is what the bar actually draws: Coach is
- * conditional, so this list is the full set rather than the visible one.
- */
-internal val barTrailingTabs = listOf(
-    BarTab(Destination.Sleep, Icons.Filled.Bedtime, R.string.nav_sleep),
-    // #2218: Coach was promoted to a top-level tab on iOS and this side did not follow, so it sat in
-    // the More list while the comment above claimed the two bars matched. AutoAwesome is the sparkles
-    // glyph iOS uses, and the same one the More row already shows, so the entry a wearer has learned
-    // keeps its face when it moves up.
-    BarTab(Destination.Coach, Icons.Filled.AutoAwesome, R.string.nav_coach),
+    BarTab(Destination.Oura, Icons.Filled.MonitorHeart, R.string.oura_title),
 )
 
-/**
- * The trailing tabs to draw for a given Coach setting.
- *
- * A function rather than a filter written inline at the bar so the Kotlin unit tests can assert the
- * two shapes directly, and so every surface that needs "which tabs are there" agrees by construction
- * instead of by two copies of the same predicate.
- */
-internal fun barTrailingTabsFor(coachEnabled: Boolean): List<BarTab> =
-    if (coachEnabled) barTrailingTabs else barTrailingTabs.filterNot { it.dest == Destination.Coach }
+/** Secondary primary tabs share the same selection rules as the leading tabs. */
+internal val barTrailingTabs = listOf(
+    BarTab(Destination.Trends, Icons.AutoMirrored.Filled.TrendingUp, R.string.nav_trends),
+    BarTab(Destination.Sleep, Icons.Filled.Bedtime, R.string.nav_sleep),
+)
+
+/** The Coach master switch applies to its More entry as well as its other launchers. */
+internal fun moreDestinationsFor(items: List<Destination>, coachEnabled: Boolean): List<Destination> =
+    if (coachEnabled) items else items.filterNot { it == Destination.Coach }
 
 @Composable
 private fun GlassBottomBar(
@@ -1147,9 +1129,7 @@ private fun GlassBottomBar(
     modifier: Modifier = Modifier,
 ) {
     // One binding, used by BOTH the slots and the More-lit predicate below. #2218's note applies here
-    // twice over: a second copy of "which tabs exist" is what let Coach light two slots at once, and a
-    // conditional tab makes that failure available again to anyone who filters in one place only.
-    val visibleTrailing = barTrailingTabsFor(BottomBarStyleStore.coachEnabled)
+    val visibleTrailing = barTrailingTabs
     val barShape = RoundedCornerShape(50)
     Box(
         modifier = modifier

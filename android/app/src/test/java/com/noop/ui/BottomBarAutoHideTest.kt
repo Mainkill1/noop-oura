@@ -84,3 +84,20 @@ class BottomBarAutoHideTest {
     }
 
 }
+
+/** Unconfigured installs retain visible navigation; an explicit auto-hide choice still wins. */
+@org.junit.runner.RunWith(org.robolectric.RobolectricTestRunner::class)
+class BottomBarAutoHideDefaultTest {
+    @Test fun defaultIsVisibleAndExplicitPreferenceIsRespected() {
+        val context = org.robolectric.RuntimeEnvironment.getApplication() as android.content.Context
+        val prefs = NoopPrefs.of(context)
+        prefs.edit().remove(NoopPrefs.KEY_BOTTOM_BAR_AUTO_HIDE).commit()
+        BottomBarStyleStore.load(context)
+        assertFalse(BottomBarStyleStore.autoHide)
+        prefs.edit().putBoolean(NoopPrefs.KEY_BOTTOM_BAR_AUTO_HIDE, true).commit()
+        BottomBarStyleStore.load(context)
+        assertTrue(BottomBarStyleStore.autoHide)
+        prefs.edit().remove(NoopPrefs.KEY_BOTTOM_BAR_AUTO_HIDE).commit()
+        BottomBarStyleStore.load(context)
+    }
+}

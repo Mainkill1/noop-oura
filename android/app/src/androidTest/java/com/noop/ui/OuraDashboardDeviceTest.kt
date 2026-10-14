@@ -32,6 +32,23 @@ import java.util.TimeZone
 class OuraDashboardDeviceTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun mainNavigationOpensOuraWithoutOpeningMore() {
+        val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as android.app.Application
+        val store = ViewModelStore()
+        val vm = ViewModelProvider(store, ViewModelProvider.AndroidViewModelFactory.getInstance(app))[AppViewModel::class.java]
+        try {
+            compose.setContent { TestTheme { AppRoot(vm) } }
+            compose.onNodeWithText("Oura").assertIsDisplayed().performClick()
+            compose.waitUntil(10_000) {
+                compose.onAllNodesWithText("Oura export").fetchSemanticsNodes().isNotEmpty()
+            }
+            compose.onNodeWithText("Oura export").assertIsDisplayed()
+            compose.onNodeWithText("Today").assertIsDisplayed()
+            compose.onNodeWithText("More").assertIsDisplayed()
+            captureEvidence("main-navigation-oura")
+        } finally { compose.runOnIdle { store.clear() } }
+    }
+
     @Test fun populatedDashboardVisualReview() {
         val day = LocalDate.of(2026, 10, 13)
         val from = day.atStartOfDay(ZoneId.systemDefault()).toEpochSecond()
