@@ -103,8 +103,9 @@ selector, category tabs, four-signal limit, saved selections, shared gap inspect
 source isolation, large text, navigation, sleep clipping, and existing XML/credential behavior.
 Populated comparison and movement screenshots were visually inspected. Tests use synthetic in-memory
 records and production Compose components; they do not validate live
-ring collection, calibration, or spoken TalkBack. The standalone root-exporter grant remains outside
-this dashboard change’s verification.
+ring collection, calibration, or spoken TalkBack. The standalone rooted exporter was subsequently
+verified on a OnePlus 15; see
+[the key-transfer verification](OURA_KEY_TRANSFER.md#verification).
 
 ### Reproducing checks
 

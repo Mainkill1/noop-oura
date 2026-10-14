@@ -70,7 +70,9 @@ class ExporterActivity : Activity() {
                 val command = "CLASSPATH=${quote(applicationInfo.sourceDir)} /system/bin/app_process /system/bin " +
                     "com.noop.keyexporter.RootKeyExportMain ${quote(prefs)} ${info.uid}"
                 check(!cancelled)
-                val process = ProcessBuilder("su", "-c", command).start()
+                // Android app-data isolation hides other sandboxes in the inherited mount namespace,
+                // even from UID 0. Use the global namespace before the helper switches to the source UID.
+                val process = ProcessBuilder("su", "--mount-master", "-c", command).start()
                 runningProcess = process
                 if (cancelled) { process.destroyForcibly(); error("Export cancelled") }
                 // Drain both bounded pipes concurrently so root errors cannot deadlock the UI.
