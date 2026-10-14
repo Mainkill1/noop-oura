@@ -135,6 +135,14 @@ fun OuraScreen(vm: AppViewModel, onDevices: () -> Unit, onImport: () -> Unit) {
             }
         }
         if (snapshot != null) {
+            items(metricKeys, key = { "signal:$sourceId:$it" }, contentType = { "signal" }) { metric ->
+                val (title, unit, note) = ouraPresentation(metric, imported, tempUnit)
+                val fahrenheit = tempUnit == TemperatureUnit.FAHRENHEIT
+                OuraSignalCard(title, unit, note, snapshot.signals[metric] ?: SignalDecimation.Summary(), from, to, showRange,
+                    valueScale = if (fahrenheit && metric in listOf("temperature", "skin_temp_dev_c")) 1.8 else 1.0,
+                    valueOffset = if (fahrenheit && metric == "temperature") 32.0 else 0.0,
+                    modifier = Modifier.staggeredAppear(metricKeys.indexOf(metric).coerceAtMost(3)))
+            }
             item(key = "explanation", contentType = "explanation") {
                 Column(verticalArrangement = Arrangement.spacedBy(Metrics.space8)) {
                     Text(stringResource(if (imported) R.string.oura_import_note else R.string.oura_decimation_note),
@@ -146,14 +154,6 @@ fun OuraScreen(vm: AppViewModel, onDevices: () -> Unit, onImport: () -> Unit) {
                             style = NoopType.caption, color = Palette.textSecondary)
                     }
                 }
-            }
-            items(metricKeys, key = { "signal:$sourceId:$it" }, contentType = { "signal" }) { metric ->
-                val (title, unit, note) = ouraPresentation(metric, imported, tempUnit)
-                val fahrenheit = tempUnit == TemperatureUnit.FAHRENHEIT
-                OuraSignalCard(title, unit, note, snapshot.signals[metric] ?: SignalDecimation.Summary(), from, to, showRange,
-                    valueScale = if (fahrenheit && metric in listOf("temperature", "skin_temp_dev_c")) 1.8 else 1.0,
-                    valueOffset = if (fahrenheit && metric == "temperature") 32.0 else 0.0,
-                    modifier = Modifier.staggeredAppear(metricKeys.indexOf(metric).coerceAtMost(3)))
             }
             item(key = "sleep-heading", contentType = "heading") {
                 Column(verticalArrangement = Arrangement.spacedBy(Metrics.space8)) {

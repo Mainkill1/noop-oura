@@ -98,7 +98,7 @@ adb -s DEVICE_SERIAL shell am instrument -w -r \
 Keep JVM tests and instrumentation assembly in separate Gradle invocations: test-source KSP can
 invalidate the Room schema export in a combined invocation. The direct ADB runner was used because
 AGP 8.5.2's connected-device discovery threw a host-side null-pointer exception for this wireless device.
-Check the runner's `OK (7 tests)` summary; the ADB process exit status alone does not establish success.
+Check the runner's `OK (8 tests)` summary; the ADB process exit status alone does not establish success.
 Screenshots are saved in the debug app's external-files `oura-test-evidence` directory.
 
 ## Android interaction and motion
@@ -109,8 +109,8 @@ Screenshots are saved in the debug app's external-files `oura-test-evidence` dir
   loaded. Changing source or date never displays the previous window under the new controls.
 - Rapid date/window taps are coalesced before database work. Metrics and individual sleep sessions use
   lazy list items; visible sleep timelines are parsed off the UI thread.
-- Chart geometry is cached. Horizontal inspection uses a binary time-bucket lookup and reserved readout
-  space; it does not rebuild paths. Large text can expand rather than truncate the readout. Vertical
+- Chart geometry is cached. Horizontal inspection uses a binary time-bucket lookup and an expanding detail
+  panel; it does not rebuild paths. Large text can expand rather than truncate the readout. Vertical
   gestures remain scrolling.
 - Range bands fade over a fixed chart scale. Band and entrance motion respect Android Reduce Motion.
   No animation interpolates physiological readings. Clock labels follow NOOP’s clock preference.
@@ -120,3 +120,15 @@ The tested large-font controls and chart inspection rendered successfully on the
 actions were invoked through Compose semantics; spoken TalkBack navigation has not been verified.
 Large-history scrolling performance, error/refresh races, live ring collection, and calibration remain
 outside this device run. No real biometric data or Bluetooth ring commands were used by the tests.
+
+### Dashboard visual polish
+
+The source toolbar groups ring management and import under More. Date navigation, window selection,
+and range visibility remain directly available. Metric cards lead with the original-sample average,
+use compact charts, and present minimum and maximum separately. Dense traces omit redundant dots;
+isolated readings and gaps remain visible. Selection adds a focus marker and reveals exact details.
+Chart methodology follows the readings rather than delaying the first metric.
+
+Full and Demo debug builds and eight device tests validate this UI revision. The device suite includes
+a populated synthetic dashboard fixture and 200% text controls on a historical date, with Today visible.
+Screenshots use Compose capture to wait for rendered content. All styling uses shared design tokens.

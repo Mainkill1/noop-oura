@@ -7,6 +7,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -31,6 +32,7 @@ internal fun OuraControls(
 ) {
     val context = LocalContext.current
     var sourceMenu by remember { mutableStateOf(false) }
+    var actionsMenu by remember { mutableStateOf(false) }
     NoopCard {
         Column(verticalArrangement = Arrangement.spacedBy(Metrics.space12)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -50,7 +52,19 @@ internal fun OuraControls(
                 IconButton(onClick = onRefresh, enabled = !loading) {
                     Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.oura_refresh))
                 }
+                Box {
+                    IconButton(onClick = { actionsMenu = true }) {
+                        Icon(Icons.Filled.MoreHoriz, contentDescription = stringResource(R.string.nav_more))
+                    }
+                    DropdownMenu(expanded = actionsMenu, onDismissRequest = { actionsMenu = false }) {
+                        DropdownMenuItem(text = { Text(stringResource(R.string.oura_manage)) },
+                            onClick = { actionsMenu = false; onDevices() })
+                        DropdownMenuItem(text = { Text(stringResource(R.string.oura_import)) },
+                            onClick = { actionsMenu = false; onImport() })
+                    }
+                }
             }
+            HorizontalDivider(color = Palette.hairline)
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = { onDay(day.minusDays(days.toLong())) }) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.oura_previous))
@@ -76,19 +90,17 @@ internal fun OuraControls(
                 day.minusDays(days.toLong() - 1).format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)) +
                     " – " + day.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)),
                 style = NoopType.captionNumber, color = Palette.textSecondary)
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                TextButton(onClick = { onDay(LocalDate.now()) }, enabled = day != LocalDate.now()) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.weight(1f).toggleable(value = showRange, role = Role.Switch, onValueChange = onRanges),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(Metrics.space8)) {
+                    Switch(checked = showRange, onCheckedChange = null)
+                    Text(stringResource(R.string.oura_show_ranges), style = NoopType.caption, color = Palette.textSecondary)
+                }
+                if (day != LocalDate.now()) TextButton(onClick = { onDay(LocalDate.now()) }) {
                     Text(stringResource(R.string.oura_today))
                 }
             }
-            Row(Modifier.fillMaxWidth().toggleable(value = showRange, role = Role.Switch, onValueChange = onRanges),
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Metrics.space8)) {
-                Text(stringResource(R.string.oura_show_ranges), Modifier.weight(1f), style = NoopType.body, color = Palette.textPrimary)
-                Switch(checked = showRange, onCheckedChange = null)
-            }
-            // Stacked actions stay usable with large fonts and narrow Android windows.
-            NoopButton(stringResource(R.string.oura_manage), kind = NoopButtonKind.Secondary, fullWidth = true, onClick = onDevices)
-            NoopButton(stringResource(R.string.oura_import), kind = NoopButtonKind.Tertiary, fullWidth = true, onClick = onImport)
             // Reserve the progress slot so refresh never moves the surrounding controls.
             Box(Modifier.fillMaxWidth().height(Metrics.space4)) {
                 if (loading) LinearProgressIndicator(Modifier.fillMaxWidth(), color = Palette.accent)

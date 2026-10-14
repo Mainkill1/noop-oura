@@ -6,6 +6,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -30,6 +31,27 @@ import java.util.TimeZone
 /** Real Room reads and Compose interactions on a phone; all records are synthetic and in memory. */
 class OuraDashboardDeviceTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun populatedDashboardVisualReview() {
+        val day = LocalDate.of(2026, 10, 13)
+        val from = day.atStartOfDay(ZoneId.systemDefault()).toEpochSecond()
+        val to = day.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toEpochSecond()
+        val summary = SignalDecimation.reduce((0 until 288).filter { it !in 130..160 }.map {
+            SignalDecimation.Sample(from + it * 300L, 65.0 + 12 * kotlin.math.sin(it / 18.0) + 4 * kotlin.math.cos(it / 5.0))
+        }, from, to, 300)
+        compose.setContent {
+            TestTheme {
+                LazyScreenScaffold(title = "Oura", subtitle = "Your ring, your history, clearer signals.") {
+                    item { OuraControls(listOf(OuraDashboardSource("fixture", "Oura Ring")), "fixture", day, 1,
+                        false, false, {}, {}, {}, {}, {}, {}, {}) }
+                    item { OuraSignalCard("Heart rate", "bpm", "", summary, from, to, false) }
+                }
+            }
+        }
+        captureEvidence("dashboard-populated")
+        compose.onNodeWithText("Heart rate").performScrollTo()
+        captureEvidence("dashboard-chart")
+    }
 
     @Test fun ringReadsStayIsolatedAndKeepSingleChannelOxygen() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
@@ -105,7 +127,7 @@ class OuraDashboardDeviceTest {
                     Column(Modifier.verticalScroll(rememberScrollState())) {
                         OuraControls(listOf(OuraDashboardSource("oura-import", "Oura export"),
                             OuraDashboardSource("oura-api", "Oura API history")), source.value,
-                            LocalDate.now(), days.value, ranges.value, false,
+                            LocalDate.now().minusDays(1), days.value, ranges.value, false,
                             { source.value = it }, {}, { days.value = it }, { ranges.value = it }, {}, {}, {})
                     }
                 }
@@ -118,7 +140,9 @@ class OuraDashboardDeviceTest {
         assertEquals(7, days.value)
         compose.onNodeWithText("Show ranges").performScrollTo().performClick()
         assertTrue(ranges.value)
-        compose.onNodeWithText("Import history").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithContentDescription("More").performScrollTo().performClick()
+        compose.onNodeWithText("Import history").assertIsDisplayed()
+        compose.onNodeWithText("Import history").performClick()
         compose.onNodeWithText("Oura API history").performScrollTo()
         captureEvidence("controls-large-text")
     }
@@ -166,6 +190,7 @@ class OuraDashboardDeviceTest {
             }
             compose.onNodeWithContentDescription("Refresh").performScrollTo().performClick()
             compose.onNodeWithText("Oura export").assertExists()
+            captureEvidence("dashboard-empty")
         } finally { compose.runOnIdle { store.clear() } }
     }
 
@@ -182,7 +207,7 @@ class OuraDashboardDeviceTest {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val directory = java.io.File(instrumentation.targetContext.getExternalFilesDir(null), "oura-test-evidence")
         check(directory.mkdirs() || directory.isDirectory)
-        val bitmap = checkNotNull(instrumentation.uiAutomation.takeScreenshot())
+        val bitmap = compose.onRoot().captureToImage().asAndroidBitmap()
         try {
             java.io.File(directory, "$name.png").outputStream().use {
                 check(bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it))

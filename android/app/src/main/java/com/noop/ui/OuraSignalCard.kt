@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
@@ -74,20 +75,24 @@ internal fun OuraSignalCard(
 
     NoopCard(modifier = modifier) {
         Column(verticalArrangement = Arrangement.spacedBy(Metrics.space12)) {
-            Text(title, style = NoopType.headline, color = Palette.textPrimary)
+            Text(title, style = NoopType.subhead, color = Palette.textPrimary)
             if (note.isNotEmpty()) Text(note, style = NoopType.caption, color = Palette.textSecondary)
             if (summary.count == 0) {
                 Text(stringResource(R.string.oura_no_readings), style = NoopType.body, color = Palette.textSecondary)
             } else {
+                Column(verticalArrangement = Arrangement.spacedBy(Metrics.space2)) {
+                    Text(format(summary.mean!!), style = NoopType.title1, color = Palette.textPrimary)
+                    Text(stringResource(R.string.explore_average), style = NoopType.caption, color = Palette.textSecondary)
+                }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Metrics.space8)) {
-                    Column(Modifier.width(Metrics.chartAxisLabelWidth).height(Metrics.chartHeight), verticalArrangement = Arrangement.SpaceBetween) {
+                    Column(Modifier.width(Metrics.chartAxisLabelWidth).height(Metrics.compactChartHeight), verticalArrangement = Arrangement.SpaceBetween) {
                         Text(String.format(locale, "%.1f", domain.second), style = NoopType.captionNumber, color = Palette.textSecondary,
                             maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text(String.format(locale, "%.1f", domain.first), style = NoopType.captionNumber, color = Palette.textSecondary,
                             maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     OuraSignalPlot(buckets, from, to, domain.first, domain.second, valueScale, valueOffset,
-                        showRange, selected, "$title: $description", accessibleBuckets, Modifier.weight(1f).height(Metrics.chartHeight))
+                        showRange, selected, "$title: $description", accessibleBuckets, Modifier.weight(1f).height(Metrics.compactChartHeight))
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Metrics.space8)) {
                     Text(axisFormat.format(Instant.ofEpochSecond(from)), Modifier.weight(1f), style = NoopType.caption, color = Palette.textSecondary)
@@ -95,9 +100,15 @@ internal fun OuraSignalCard(
                         color = Palette.textSecondary, textAlign = TextAlign.End)
                 }
                 OuraBucketReadout(buckets, selected, format, timeFormat, dateFormat)
-                summary.mean?.let { mean ->
-                    Text(stringResource(R.string.oura_summary, format(mean), format(summary.minimum!!), format(summary.maximum!!)),
-                        style = NoopType.captionNumber, color = Palette.textSecondary)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Metrics.space16)) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Metrics.space2)) {
+                        Text(stringResource(R.string.explore_min), style = NoopType.caption, color = Palette.textSecondary)
+                        Text(format(summary.minimum!!), style = NoopType.bodyNumber, color = Palette.textPrimary)
+                    }
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Metrics.space2)) {
+                        Text(stringResource(R.string.explore_max), style = NoopType.caption, color = Palette.textSecondary)
+                        Text(format(summary.maximum!!), style = NoopType.bodyNumber, color = Palette.textPrimary)
+                    }
                 }
                 Text(description, style = NoopType.caption, color = Palette.textSecondary)
             }
@@ -164,7 +175,7 @@ private fun OuraSignalPlot(
             val ranges = Path().apply {
                 buckets.forEach { addRect(Rect(x(it.start), y(it.maximum), x(it.end), y(it.minimum))) }
             }
-            val stroke = Stroke(width = Metrics.space2.toPx())
+            val stroke = Stroke(width = Metrics.space2.toPx(), cap = StrokeCap.Round)
             val radius = Metrics.space2.toPx()
             onDrawBehind {
                 for (fraction in listOf(0f, 0.5f, 1f)) {
@@ -172,9 +183,18 @@ private fun OuraSignalPlot(
                 }
                 if (bandAlpha.value > 0f) drawPath(ranges, Palette.accent.copy(alpha = bandAlpha.value))
                 drawPath(trace, Palette.accent, style = stroke)
-                points.forEach { drawCircle(Palette.accent, radius = radius, center = it) }
+                points.forEachIndexed { index, point ->
+                    // Dense traces stay clean; isolated observations remain visible.
+                    if (buckets.size < 12 ||
+                        ((index == 0 || buckets[index - 1].end != buckets[index].start) &&
+                            (index == buckets.lastIndex || buckets[index].end != buckets[index + 1].start))) {
+                        drawCircle(Palette.accent, radius = radius, center = point)
+                    }
+                }
                 points.getOrNull(selected.intValue)?.let { point ->
                     drawLine(Palette.textSecondary, Offset(point.x, 0f), Offset(point.x, size.height))
+                    drawCircle(Palette.accent.copy(alpha = StrandAlpha.selectedFill), Metrics.space8.toPx(), point)
+                    drawCircle(Palette.accent, Metrics.space4.toPx(), point)
                 }
             }
         })
@@ -211,9 +231,9 @@ private fun OuraBucketReadout(
     val detail = bucket?.let {
         stringResource(R.string.oura_bucket_detail, format(it.median), format(it.minimum), format(it.maximum), it.count)
     } ?: ""
-    // Reserve idle space without hiding exact values when large text needs extra lines.
+    // Let exact values wrap naturally, without reserving an empty detail panel.
     Column(verticalArrangement = Arrangement.spacedBy(Metrics.space4)) {
-        Text(time, style = NoopType.captionNumber, color = Palette.textPrimary, minLines = 2)
-        Text(detail, style = NoopType.captionNumber, color = Palette.textSecondary, minLines = 3)
+        Text(time, style = NoopType.captionNumber, color = Palette.textPrimary)
+        if (detail.isNotEmpty()) Text(detail, style = NoopType.captionNumber, color = Palette.textSecondary)
     }
 }
