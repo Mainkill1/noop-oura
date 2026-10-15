@@ -1,11 +1,26 @@
 # Oura dashboard
 
 Tap **Oura** in Android’s bottom navigation. One dashboard offers **Health**, **Sleep**,
-**Movement**, and **Compare** through a category dropdown, with a separate sliding **History / Live** selector.
+**Movement**, **Compare**, and **Raw** through a category dropdown. A separate sliding **History / Live**
+selector controls the standard stats views; Raw identifies each channel's own acquisition method.
 The compact instrument layout uses NOOP’s typography and color tokens with flat panels, thin
 borders, small corner radii, and dense controls. Graphs receive more of the available screen space.
 The dashboard and live-session lifecycle are Android-specific. Pure live-motion wire decoding and
 command builders have Kotlin/Swift twins. Motion remains raw instrumentation and does not change scoring.
+
+## Raw instruments
+
+**Raw** offers event and field dropdowns with **Graph**, **Gauge**, **Numbers**, and **Bytes** displays.
+It separates live HR/XYZ pushes, downloaded ring records, and existing read-only battery/feature-status
+queries. Numeric summaries show the retained window's latest, minimum, maximum, mean and count.
+Byte inspection exposes sensor responses in hex, decimal and escaped text without capturing keys or
+authentication frames. Research oxygen/PPG records remain visible as bytes without guessed calibration.
+
+Read-only polling has a direct interval selector and a central one-request worker. Queue wait,
+local GATT completion, observed response latency and push arrival intervals remain separate.
+Rapid navigation cannot create parallel workers or catch-up bursts. The foreground owns polling;
+leaving or switching apps stops it. See [raw instruments](OURA_RAW_INSTRUMENTS.md) for event coverage,
+timing limitations, research provenance and validation.
 
 ## Sources and time
 
@@ -133,8 +148,14 @@ The follow-up passes 37 focused JVM tests, including a real-source notification 
 status replacement, isolation from other features, no outbound command, and disconnect clearing.
 Full, Demo, and instrumentation APK builds pass, as do localization and doc-comment checks. Four new
 production Compose fixtures cover trace/unit/style legends, hidden-axis stability, range keys, and
-oxygen off/on/unknown without fabricated freshness. Their physical execution and rendered inspection
-remain pending after wireless ADB disconnected when the phone relocked. Code review found no defects.
+oxygen off/on/unknown without fabricated freshness. After ADB reconnected, all 30 non-key Oura UI
+fixtures executed on the OnePlus 15: 28 passed and two geometry/navigation fixtures failed. One compared
+clipped bounds for a plot outside the viewport; the other queried a lazy item before scrolling it into
+composition. Corrections and a complete rerun are tracked with the raw-instruments update. The published
+12.3.1 APK installed successfully and preserved the encrypted key preferences byte-for-byte; the ring
+authenticated with the existing key. A motion run received 1,064 packets/2,128 vectors, then completed
+ordered shutdown and resumed history. Demand ended before the renewal boundary, so that run does not
+establish continuous lease renewal. Code review of 12.3.1 found no defects.
 
 ## Continuous Live and compact layout verification (12.3.0)
 
