@@ -36,7 +36,7 @@
   <string name="oura_live_waiting_samples">Waiting for first samples</string>
   <string name="oura_live_receiving">Receiving samples</string>
   <string name="oura_live_no_new_samples">No new samples</string>
-  <string name="oura_live_unavailable">Stream unavailable; stop and explicitly start to try again</string>
+  <string name="oura_live_unavailable">Stream unavailable; leave Live and return to retry</string>
   <string name="oura_live_raw">Raw</string>
   <string name="oura_live_smoothed">Smoothed</string>
   <string name="oura_live_trend_info">Smoothed shows a trailing 3-second HR mean. Latest values and inspection always show raw samples.</string>

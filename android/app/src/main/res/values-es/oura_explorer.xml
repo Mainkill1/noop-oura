@@ -36,7 +36,7 @@
   <string name="oura_live_waiting_samples">Esperando las primeras muestras</string>
   <string name="oura_live_receiving">Recibiendo muestras</string>
   <string name="oura_live_no_new_samples">Sin muestras nuevas</string>
-  <string name="oura_live_unavailable">Flujo no disponible; detén e inicia explícitamente para reintentar</string>
+  <string name="oura_live_unavailable">Flujo no disponible; sal de En vivo y vuelve para reintentar</string>
   <string name="oura_live_raw">Bruto</string>
   <string name="oura_live_smoothed">Suavizado</string>
   <string name="oura_live_trend_info">Suavizado muestra la media de FC de los últimos 3 segundos. El último valor y la inspección siempre muestran muestras brutas.</string>

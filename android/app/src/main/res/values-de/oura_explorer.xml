@@ -36,7 +36,7 @@
   <string name="oura_live_waiting_samples">Warten auf erste Messwerte</string>
   <string name="oura_live_receiving">Messwerte werden empfangen</string>
   <string name="oura_live_no_new_samples">Keine neuen Messwerte</string>
-  <string name="oura_live_unavailable">Stream nicht verfügbar; stoppen und ausdrücklich neu starten</string>
+  <string name="oura_live_unavailable">Stream nicht verfügbar; Live verlassen und erneut öffnen</string>
   <string name="oura_live_raw">Roh</string>
   <string name="oura_live_smoothed">Geglättet</string>
   <string name="oura_live_trend_info">Geglättet zeigt den nachlaufenden 3-Sekunden-HF-Mittelwert. Letzter Wert und Inspektion zeigen immer Rohwerte.</string>

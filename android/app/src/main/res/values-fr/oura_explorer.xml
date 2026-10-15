@@ -36,7 +36,7 @@
   <string name="oura_live_waiting_samples">En attente des premiers échantillons</string>
   <string name="oura_live_receiving">Réception des échantillons</string>
   <string name="oura_live_no_new_samples">Aucun nouvel échantillon</string>
-  <string name="oura_live_unavailable">Flux indisponible ; arrêter et redémarrer explicitement pour réessayer</string>
+  <string name="oura_live_unavailable">Flux indisponible ; quittez En direct puis revenez pour réessayer</string>
   <string name="oura_live_raw">Brut</string>
   <string name="oura_live_smoothed">Lissé</string>
   <string name="oura_live_trend_info">Lissé affiche la moyenne de FC des 3 dernières secondes. La dernière valeur et l’inspection montrent toujours les échantillons bruts.</string>
