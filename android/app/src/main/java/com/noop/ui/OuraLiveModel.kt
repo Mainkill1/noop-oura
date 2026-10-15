@@ -7,7 +7,7 @@ internal fun ouraLiveSelection(category: OuraCategory, comparison: Set<String>) 
     OuraCategory.Health -> OuraLiveSelection(hr = true)
     OuraCategory.Movement -> OuraLiveSelection(motion = true)
     OuraCategory.Compare -> OuraLiveSelection(hr = "hr" in comparison, motion = comparison.any { it in setOf("x", "y", "z") })
-    OuraCategory.Sleep -> OuraLiveSelection()
+    OuraCategory.Sleep, OuraCategory.Raw -> OuraLiveSelection()
 }
 
 internal enum class OuraLiveAction { Start, Update, Stop }

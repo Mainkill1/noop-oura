@@ -48,6 +48,7 @@ USAGE:
   oura-decode [--gen gen3|gen4|gen5] [--allow-tier-b] [--json] [FILE]
   cat capture.json | oura-decode --gen gen3
   oura-decode --hex 600e0100000000010401000000000000
+  oura-decode --raw-events [FILE | --hex HEX ...]
   oura-decode --live-motion [--json] [FILE | --hex HEX ...]
   oura-decode --live-motion-commands
   oura-decode --live-motion-summary [FILE]
@@ -66,6 +67,7 @@ dropped unless --allow-tier-b is passed, so unverified layouts never feed values
 var gen: OuraRingGen = .gen3
 var allowTierB = false
 var jsonOut = false
+var rawEvents = false
 var liveMotion = false
 var liveMotionCommands = false
 var liveMotionSummary = false
@@ -81,6 +83,7 @@ while i < args.count {
     case "-h", "--help":
         print(helpText); exit(0)
     case "--json": jsonOut = true
+    case "--raw-events": rawEvents = true
     case "--live-motion": liveMotion = true
     case "--live-motion-summary": liveMotionSummary = true; liveMotion = true
     case "--live-motion-commands": liveMotionCommands = true
@@ -193,6 +196,7 @@ func describe(_ e: OuraEvent) -> String {
 
 let driver = OuraDriver(ringGen: gen, authKey: nil, allowTierB: allowTierB)
 let reassembler = OuraReassembler()
+let rawWindow = OuraRawBuffer()
 
 struct JSONLine: Encodable { let index: Int; let kind: String; let detail: String }
 var jsonLines: [JSONLine] = []
@@ -207,6 +211,26 @@ for (n, rec) in records.enumerated() {
         continue
     }
     total += 1
+    if rawEvents {
+        let captures = OuraRawInstruments.capture(raw)
+        for capture in captures {
+            rawWindow.append(capture, receivedAtElapsedMs: rec.tsMs ?? 0)
+            let bytes = capture.wire.map { String(format: "%02x", $0) }.joined(separator: " ")
+            let fields = capture.fields.map { field in "\(field.key) [\(field.unit)]=" + field.values.map(String.init(describing:)).joined(separator: ",") }.joined(separator: "; ")
+            let summaries = capture.fields.compactMap { field -> String? in
+                guard let stats = OuraRawInstruments.statistics(field.values) else { return nil }
+                return "\(field.key): latest=\(stats.latest) min=\(stats.minimum) max=\(stats.maximum) mean=\(stats.mean) count=\(stats.count)"
+            }.joined(separator: "; ")
+            let known = OuraRawInstruments.catalog.first { $0.key == capture.channel }
+            let state = known.map { "\($0.acquisition) verified=\($0.verified)" } ?? "record raw-only"
+            let detail = "\(state) | \(capture.context) | length=\(capture.wire.count) ringTick=\(capture.ringTick.map(String.init) ?? "unavailable") | hex=\(bytes) | decimal=\(capture.wire) | text=\(OuraRawInstruments.readable(capture.wire)) | \(fields) | stats \(summaries)"
+            if jsonOut { jsonLines.append(JSONLine(index: n, kind: capture.channel, detail: detail)) }
+            else { print("[\(n)] \(capture.channel) \(detail)") }
+            decodedCount += 1
+        }
+        if captures.isEmpty && !jsonOut { print("[\(n)] no safe complete raw event") }
+        continue
+    }
     if liveMotion || raw.first == 0x33 {
         if liveMotionSummary && rec.tsMs == nil { die("--live-motion-summary requires a host-receipt ts_ms for every capture record") }
         let frames = OuraFraming.parseOuterFrames(raw)
@@ -279,4 +303,9 @@ if liveMotionSummary {
         summary += "  \(pad(String(c), 5, right: true))  \(t)\n"
     }
     FileHandle.standardError.write(Data(summary.utf8))
+}
+
+if rawEvents && !jsonOut {
+    let window = rawWindow.snapshot()
+    print("raw window retained=\(window.records.count) evicted=\(window.evictedRecords) bytes=\(window.evictedBytes) values=\(window.evictedValues) oversized=\(window.truncatedRecords)")
 }

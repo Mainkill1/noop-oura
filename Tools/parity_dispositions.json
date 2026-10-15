@@ -412,6 +412,46 @@
       "identity_sha256": "8ec4c6a066d8764b5f5662e0ae5f59fbf290a83a3801cb77fd1a6de23cf1c6ed",
       "platform": "swift",
       "rationale": "Swift static let caches a computed set of required field names; its Kotlin twin is the immutable companion val OuraLiveMotionSummary.numericKeys. Kotlin cannot declare this object as const val, the only Kotlin constant form the inventory recognizes. Reciprocal payload and boundary oracle tests verify the actual shared contract."
+    },
+    {
+      "type": "platform_specific",
+      "kind": "add-unpaired-constant",
+      "identity": "swift\u0000Packages/OuraProtocol/Sources/OuraProtocol/OuraRawInstruments.swift::denied",
+      "identity_sha256": "86825db3d2429b881ab3817e93d7a411058b4802679ecd4d9a19902f4ad680b1",
+      "platform": "swift",
+      "rationale": "Swift static let caches the denied collection; the independently implemented Kotlin twin is OuraRawInstruments.denied, an immutable object val. Kotlin cannot declare Set/List objects as const val, the only Kotlin constant form recognized by the inventory. The standalone exhaustive Swift oracle and symmetric Kotlin/Swift tests pin this collection and the capture/decoding contract."
+    },
+    {
+      "type": "platform_specific",
+      "kind": "add-unpaired-constant",
+      "identity": "swift\u0000Packages/OuraProtocol/Sources/OuraProtocol/OuraRawInstruments.swift::decoded",
+      "identity_sha256": "00e4040f7c8c24127e0986177851fd1a4b8baad292b26fa2676e883988c4878b",
+      "platform": "swift",
+      "rationale": "Swift static let caches the decoded collection; the independently implemented Kotlin twin is OuraRawInstruments.decoded, an immutable object val. Kotlin cannot declare Set/List objects as const val, the only Kotlin constant form recognized by the inventory. The standalone exhaustive Swift oracle and symmetric Kotlin/Swift tests pin this collection and the capture/decoding contract."
+    },
+    {
+      "type": "platform_specific",
+      "kind": "add-unpaired-constant",
+      "identity": "swift\u0000Packages/OuraProtocol/Sources/OuraProtocol/OuraRawInstruments.swift::catalog",
+      "identity_sha256": "b71774352ff5c4762a2278a4df14dd7c8040cd237681a62493bbcfdbd52a325f",
+      "platform": "swift",
+      "rationale": "Swift static let caches the catalog collection; the independently implemented Kotlin twin is OuraRawInstruments.catalog, an immutable object val. Kotlin cannot declare Set/List objects as const val, the only Kotlin constant form recognized by the inventory. The standalone exhaustive Swift oracle and symmetric Kotlin/Swift tests pin this collection and the capture/decoding contract."
+    },
+    {
+      "type": "platform_specific",
+      "kind": "add-unpaired-constant",
+      "identity": "swift\u0000Packages/OuraProtocol/Sources/oura-decode/main.swift::rawWindow",
+      "identity_sha256": "60a67b92cb5f639dca2833c8e34748c755fd08f61a6363557d1087021eaf18e8",
+      "platform": "swift",
+      "rationale": "The Swift-only oura-decode executable owns rawWindow as bounded offline replay/session-output state for --raw-events. Android has no CLI entry point; its actual BLE/session owner lives in the Android-specific ble layer. This adapter holds no shared decoder or physiological formula, which remain independently implemented and oracle-pinned in both OuraRawInstruments twins."
+    },
+    {
+      "type": "platform_specific",
+      "kind": "add-unpaired-constant",
+      "identity": "swift\u0000Packages/OuraProtocol/Sources/oura-decode/main.swift::window",
+      "identity_sha256": "53acb598a3dc20b9a63d262315a302700019e4801ac5a5f085f8486017681a62",
+      "platform": "swift",
+      "rationale": "The Swift-only oura-decode executable owns window as bounded offline replay/session-output state for --raw-events. Android has no CLI entry point; its actual BLE/session owner lives in the Android-specific ble layer. This adapter holds no shared decoder or physiological formula, which remain independently implemented and oracle-pinned in both OuraRawInstruments twins."
     }
   ]
 }

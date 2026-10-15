@@ -183,4 +183,20 @@ class OuraWriteQueueTest {
         assertFalse(stale)
     }
 
+    @Test fun obsoleteRawReadCancelsBeforeOffWhileAcceptedReadIsRetained() {
+        val sent = mutableListOf<String>()
+        val queue = OuraWriteQueue(submit = { sent += it.label; true })
+        queue.reconcileLive(OuraLiveSelection(motion = true), true)
+        queue.complete(true)
+        val accepted = com.noop.oura.OuraCommands.getBattery()
+        val obsolete = com.noop.oura.OuraCommands.spo2ReadStatus()
+        queue.enqueue(accepted); queue.enqueue(obsolete)
+        assertFalse(queue.cancelPending(accepted))
+        assertTrue(queue.cancelPending(obsolete))
+        queue.reconcileLive(OuraLiveSelection(), false)
+        queue.complete(true); queue.complete(true)
+        assertEquals(listOf("acm_start", accepted.label, "acm_stop"), sent)
+        assertTrue(queue.idle)
+    }
+
 }

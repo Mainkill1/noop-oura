@@ -39,8 +39,8 @@ class OuraLegendDeviceTest {
         compose.onNodeWithTag("oura-legend-y").assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Dashed line"))
         compose.onNodeWithTag("oura-legend-z").assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Dotted line"))
         compose.onNodeWithTag("oura-chart-legend").performScrollTo().assertIsDisplayed()
-        val legend = compose.onNodeWithTag("oura-chart-legend").fetchSemanticsNode().boundsInRoot
-        val plot = compose.onNodeWithTag("oura-live-plot").fetchSemanticsNode().boundsInRoot
+        val legend = compose.onNodeWithTag("oura-chart-legend").getUnclippedBoundsInRoot()
+        val plot = compose.onNodeWithTag("oura-live-plot").getUnclippedBoundsInRoot()
         assertTrue(legend.bottom <= plot.top)
         capture("legend-live-large-font-synthetic")
         compose.runOnIdle { selected = selected - "x" }

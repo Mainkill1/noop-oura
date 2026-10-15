@@ -78,6 +78,31 @@ class OuraDecodeCLITests(unittest.TestCase):
         self.assertEqual(old.returncode, 0, old.stderr)
         self.assertEqual([row["kind"] for row in json.loads(old.stdout)], ["IBI"] * 6)
 
+    def test_raw_events_retains_low_quality_pairs_and_exact_wire_bytes(self):
+        result = self.run_cli("--raw-events", "--json", "--hex", "800a0100000000006408ff1f")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        row = json.loads(result.stdout)[0]
+        self.assertEqual(row["kind"], "event:80")
+        self.assertIn("ibi [ms]=0.0,800.0,2047.0", row["detail"])
+        self.assertIn("quality [bits]=0.0,1.0,3.0", row["detail"])
+        self.assertIn("length=12 ringTick=1", row["detail"])
+        self.assertIn("hex=80 0a 01 00 00 00 00 00 64 08 ff 1f", row["detail"])
+
+    def test_raw_research_and_unknown_records_stay_bytes_without_guessed_metrics(self):
+        result = self.run_cli("--raw-events", "--json", "--hex", "8b080100000080ffff00", "81080100000080ffff00", "90060100000000ff")
+        rows = json.loads(result.stdout)
+        self.assertEqual([r["kind"] for r in rows], ["event:8b", "event:81", "event:90"])
+        for row in rows:
+            self.assertIn("byte[0] [byte]", row["detail"])
+            self.assertNotIn("SpO2", row["detail"])
+            self.assertNotIn("cardiovascular", row["detail"])
+
+    def test_raw_allowlist_drops_auth_and_malformed_full_envelopes(self):
+        for value in ["2f0404aabbcc", "430701000000414243", "8006010000006408330800"]:
+            result = self.run_cli("--raw-events", "--json", "--hex", value)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(json.loads(result.stdout), [])
+
 
 if __name__ == "__main__":
     unittest.main()

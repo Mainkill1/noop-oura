@@ -25,7 +25,7 @@ internal fun OuraExplorerNavigation(mode: OuraViewMode, category: OuraCategory,
     val liveLabel = stringResource(R.string.nav_live)
     val historyLabel = stringResource(R.string.oura_history)
     Column(verticalArrangement = Arrangement.spacedBy(Metrics.space12)) {
-        OuraToolbar(items = OuraViewMode.entries, selection = mode,
+        if (category != OuraCategory.Raw) OuraToolbar(items = OuraViewMode.entries, selection = mode,
             label = { if (it == OuraViewMode.Live) liveLabel else historyLabel },
             onSelect = onMode, modifier = Modifier.fillMaxWidth().pointerInput(Unit) {
                 fun select(x: Float) {
@@ -67,4 +67,5 @@ internal fun ouraCategoryLabel(item: OuraCategory): Int = when (item) {
     OuraCategory.Sleep -> R.string.nav_sleep
     OuraCategory.Movement -> R.string.oura_tab_movement
     OuraCategory.Compare -> R.string.nav_compare
+    OuraCategory.Raw -> R.string.oura_raw_category
 }

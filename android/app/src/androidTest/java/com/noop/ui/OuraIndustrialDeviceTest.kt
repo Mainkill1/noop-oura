@@ -42,6 +42,9 @@ class OuraIndustrialDeviceTest {
             compose.onNodeWithTag("oura-category-${next.name}").assertIsDisplayed().performClick()
             compose.runOnIdle { assertEquals(next, category); assertEquals(OuraViewMode.History, mode) }
         }
+        compose.onNodeWithText("Live").assertDoesNotExist()
+        compose.onNodeWithTag("oura-category-picker").performClick()
+        compose.onNodeWithTag("oura-category-Compare").performClick()
         // Swipe over the visible Live segment: its position must agree with the drag hit region.
         compose.onNodeWithText("Live").performTouchInput { swipeRight() }
         compose.runOnIdle { assertEquals(OuraViewMode.Live, mode); assertEquals(OuraCategory.Compare, category) }
@@ -107,10 +110,10 @@ class OuraIndustrialDeviceTest {
             } }
             compose.onNodeWithTag("synthetic-host-graph").performScrollTo()
             capture("industrial-host-history-graph-synthetic")
+            compose.runOnIdle { kotlinx.coroutines.runBlocking { listState.scrollToItem(10) } }
             compose.onNodeWithText("2 vectors").performScrollTo().assertExists()
             compose.onNodeWithText("X axis: mean 900.0 · min -1200 · max 3000").assertExists()
             compose.onNodeWithTag("oura-host-last-detail").performScrollTo()
-            compose.runOnIdle { kotlinx.coroutines.runBlocking { listState.scrollToItem(10) } }
             val detail = compose.onNodeWithTag("oura-host-last-detail").fetchSemanticsNode().boundsInRoot
             val overlay = compose.onNodeWithTag("synthetic-overlay").fetchSemanticsNode().boundsInRoot
             assertTrue("Last detail must scroll above the measured overlay", detail.bottom <= overlay.top)

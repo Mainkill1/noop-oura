@@ -501,17 +501,20 @@ class OuraLiveSource(
 
     /** Queue, timer, and callback ownership belong to one immutable GATT session. */
     private inner class WriteSession(val link: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
+        private var completionReceiptElapsedMs: Long? = null
         private var timeout: Runnable? = null
         private val teardownDeadline = Runnable { finishTeardown() }
         val queue: OuraWriteQueue = OuraWriteQueue(
             elapsedMs = { SystemClock.elapsedRealtime() },
             submit = { command -> submitWrite(link, characteristic, command) },
             onStarted = { command ->
+                rawPoll.started(command)
                 val task = Runnable { queueTimeout(command) }
                 timeout = task
                 handler.postDelayed(task, WRITE_CALLBACK_TIMEOUT_MS)
             },
             onFinished = { cancelTimeout() },
+            onCompleted = { command -> rawPoll.completed(command, completionReceiptElapsedMs ?: SystemClock.elapsedRealtime()); publishRawInstruments() },
             onFailure = { command, reason ->
                 log("Oura: write ${command.label} failed ($reason) - closing this session without replay")
                 handler.post {
@@ -526,6 +529,11 @@ class OuraLiveSource(
             },
         )
 
+        fun complete(success: Boolean, receipt: Long) {
+            completionReceiptElapsedMs = receipt
+            queue.complete(success)
+            completionReceiptElapsedMs = null
+        }
         private fun queueTimeout(command: OuraCommand): Unit = queue.timeout(command)
         private fun cancelTimeout() {
             timeout?.let(handler::removeCallbacks)
@@ -1347,6 +1355,7 @@ class OuraLiveSource(
         driver = OuraDriver(ringGen = ringGen, authKey = authKey(), allowTierB = true,
                             allowKeyInstall = adoptIntent, notificationMask = notificationMask)
         reassembler.reset()
+        resetRawInstruments()
         pendingInstallKey = null       // a new connection starts with no install in flight
         _adoptPhase.value = AdoptPhase.Idle   // a stale outcome must never drive the wizard's transition
         resetWear()   // #628: fresh session — clear any stale worn/charging badge
@@ -1478,6 +1487,7 @@ class OuraLiveSource(
         writeChar = null
         notifyChar = null
         reassembler.reset()
+        resetRawInstruments()
         loggedFirstHr = false      // a later reconnect should log its first sample again
         loggedFirstTemp = false
         loggedFirstSpo2.clear()
@@ -1651,6 +1661,7 @@ class OuraLiveSource(
                     dropUnanchoredHypnogramBursts()
                     commitInterruptedDrainCursor()   // #2443: bank progress before the anchor goes
                     reassembler.reset()
+                    resetRawInstruments()
                     loggedFirstTemp = false
                     loggedFirstSpo2.clear()
                     loggedAnchor = false
@@ -1756,14 +1767,16 @@ class OuraLiveSource(
             }
         }
 
-        override fun onCharacteristicWrite(g: BluetoothGatt, ch: BluetoothGattCharacteristic, status: Int) =
+        override fun onCharacteristicWrite(g: BluetoothGatt, ch: BluetoothGattCharacteristic, status: Int) {
+            val receipt = SystemClock.elapsedRealtime()
             onGattThread("characteristic-write") {
                 val current = writeSession
                 val owner = current?.takeIf { it.link === g } ?: retiringWrites[g]
                 if (owner == null || ch.uuid != WRITE_UUID) return@onGattThread
                 if (status != BluetoothGatt.GATT_SUCCESS) log("Oura: characteristic write failed (GATT status=$status)")
-                owner.queue.complete(status == BluetoothGatt.GATT_SUCCESS)
+                owner.complete(status == BluetoothGatt.GATT_SUCCESS, receipt)
             }
+        }
 
         override fun onCharacteristicChanged(
             g: BluetoothGatt,
@@ -1985,6 +1998,90 @@ class OuraLiveSource(
 
     private val sessionMemory = OuraLiveSession()
     private val liveWorkload = OuraLiveWorkload()
+    private var rawMemory = com.noop.oura.OuraRawBuffer()
+    private val rawPoll = OuraRawPoll(liveWorkload.sourceIncarnation,
+        { SystemClock.elapsedRealtime() }, { commandQueue?.enqueue(it) }, { commandQueue?.cancelPending(it) ?: true })
+    private val _rawInstruments = MutableStateFlow(OuraRawState(sourceDeviceId = deviceId,
+        sourceIncarnation = liveWorkload.sourceIncarnation, poll = rawPoll.snapshot))
+    val rawInstruments: StateFlow<OuraRawState> = _rawInstruments.asStateFlow()
+    private var rawPublishScheduled = false
+    private val rawPublish = Runnable { rawPublishScheduled = false; publishRawInstruments() }
+    private val rawWorker = object : Runnable {
+        override fun run() {
+            rawPoll.tick(reachedStreaming && driver?.phase == OuraDriverPhase.Streaming &&
+                _historySyncPhase.value == OuraHistorySyncPhase.IDLE && commandQueue?.idle == true && !liveWorkload.hasDemand)
+            if (_rawInstruments.value.poll != rawPoll.snapshot) publishRawInstruments()
+            if (rawPoll.hasWork) handler.postDelayed(this, 100L)
+        }
+    }
+    private var rawLifecycleRegistered = false
+    private val rawLifecycle = object : Application.ActivityLifecycleCallbacks {
+        override fun onActivityPaused(activity: Activity) { suspendRawInstruments() }
+        override fun onActivityStopped(activity: Activity) { suspendRawInstruments() }
+        override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {}
+        override fun onActivityStarted(activity: Activity) {}
+        override fun onActivityResumed(activity: Activity) {}
+        override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {}
+        override fun onActivityDestroyed(activity: Activity) {}
+    }
+    private fun publishRawInstruments() {
+        val capture = rawMemory.snapshot()
+        val times = capture.records.mapNotNull { it.observation.ringTick }.distinct().mapNotNull { tick ->
+            driver?.unixSeconds(tick)?.let { tick to it }
+        }.toMap()
+        _rawInstruments.value = OuraRawState(deviceId, liveWorkload.sourceIncarnation, rawPoll.snapshot, capture, times)
+    }
+    private fun suspendRawInstruments() {
+        rawPoll.intent(rawPoll.snapshot.generation, null, 2000, false)
+        if (rawLifecycleRegistered) (appContext as? Application)?.unregisterActivityLifecycleCallbacks(rawLifecycle)
+        rawLifecycleRegistered = false
+        handler.removeCallbacks(rawWorker)
+        if (rawPoll.hasWork) handler.post(rawWorker)
+        publishRawInstruments()
+    }
+    private fun resetRawInstruments() {
+        suspendRawInstruments()
+        rawPoll.reset()
+        rawMemory = com.noop.oura.OuraRawBuffer()
+        handler.removeCallbacks(rawWorker); handler.removeCallbacks(rawPublish); rawPublishScheduled = false
+        publishRawInstruments()
+    }
+    // Ownership is checked at the source, not trusted to a Compose callback or a coordinator mirror.
+    fun rawInstrumentsIntent(expectedDeviceId: String, incarnation: Long, generation: Long,
+        channel: String?, intervalMs: Long, foreground: Boolean) = onGattThread("raw-intent") {
+        if (expectedDeviceId != deviceId || incarnation != liveWorkload.sourceIncarnation) return@onGattThread
+        rawPoll.intent(generation, channel, intervalMs, foreground)
+        if (rawPoll.snapshot.channel != null && !rawLifecycleRegistered) {
+            (appContext as? Application)?.registerActivityLifecycleCallbacks(rawLifecycle); rawLifecycleRegistered = true
+        } else if (rawPoll.snapshot.channel == null && rawLifecycleRegistered) {
+            (appContext as? Application)?.unregisterActivityLifecycleCallbacks(rawLifecycle); rawLifecycleRegistered = false
+        }
+        handler.removeCallbacks(rawWorker)
+        if (rawPoll.hasWork) handler.postDelayed(rawWorker, 150L)
+        publishRawInstruments()
+    }
+    private fun captureRawInstruments(bytes: IntArray, receipt: Long): List<com.noop.oura.OuraRawObservation> {
+        val captures = com.noop.oura.OuraRawInstruments.capture(bytes.toList())
+        for (capture in captures.filter { it.ringTick == null }) {
+            rawMemory.append(capture, receipt)
+            if (capture.channel == "battery" || capture.channel.startsWith("status:"))
+                rawPoll.response(com.noop.oura.OuraOuterFrame(capture.wire[0], capture.wire.drop(2).toIntArray()), receipt)
+            scheduleRawPublication()
+        }
+        return captures.filter { it.ringTick != null }
+    }
+    private fun scheduleRawPublication() {
+        if (!rawPublishScheduled) { rawPublishScheduled = true; handler.postDelayed(rawPublish, 200L) }
+    }
+    private fun captureRawRecord(rec: com.noop.oura.OuraRecord, candidates: List<com.noop.oura.OuraRawObservation>, receipt: Long) {
+        // The transport's complete reassembled record must match actual safe wire evidence. Never
+        // manufacture a wire frame from a typed event, or capture a leniently clamped record.
+        val capture = candidates.firstOrNull { candidate -> candidate.ringTick == rec.ringTimestamp &&
+            candidate.wire[0] == rec.type && candidate.wire.size == rec.totalLength &&
+            candidate.wire.drop(6) == rec.payload.toList() } ?: return
+        rawMemory.append(capture, receipt)
+        scheduleRawPublication()
+    }
     private var liveWorkScheduled = false
     private var liveOwnerPreviousGeneration: Long? = null
     private var liveTransportDirty = false
@@ -2251,6 +2348,7 @@ class OuraLiveSource(
                                    receivedAtElapsedMs: Long = SystemClock.elapsedRealtime()) = guardedCallback("notification") {
         val d = driver ?: return@guardedCallback
         val bytes = IntArray(data.size) { data[it].toInt() and 0xFF }
+        val rawRecords = captureRawInstruments(bytes, receivedAtElapsedMs)
         // Split any packed outer frames; route 0x2F secure sub-frames through the driver's secure handler
         // and feed all other bytes to the TLV reassembler.
         val nonSecure = ArrayList<Int>()
@@ -2345,6 +2443,7 @@ class OuraLiveSource(
         if (nonSecure.isNotEmpty()) {
             val records = reassembler.feed(IntArray(nonSecure.size) { nonSecure[it] })
             for (rec in records) {
+                captureRawRecord(rec, rawRecords, receivedAtElapsedMs)
                 // HISTORY-LOG records (the live-HR path is ingestLiveHRPush via routeSecure): every
                 // envelope ring-time advances the drain's in-session continuation cursor (open_oura
                 // drain_events tracks the max timestamp of EVERY batch event), and while a continuation
@@ -2370,6 +2469,7 @@ class OuraLiveSource(
     private fun routeSecure(d: OuraDriver, secure: com.noop.oura.OuraSecureFrame, liveGeneration: Long, receivedAtElapsedMs: Long) = guardedCallback("secure-route") {
         when (val routing = d.handleSecureFrame(secure)) {
             is OuraDriver.SecureRouting.Nonce -> {
+                suspendRawInstruments()
                 invalidateLiveWorkload()
                 endLiveSession("authentication nonce", resumeHistory = false)
                 clearAuthWatchdog()   // the ring answered: the healthy path, and the watchdog's only exit
@@ -2377,6 +2477,7 @@ class OuraLiveSource(
                 advance(OuraTransition.NonceReceived(routing.nonce))
             }
             is OuraDriver.SecureRouting.AuthStatus -> {
+                suspendRawInstruments()
                 log("Oura: auth status = ${routing.status.name}")
                 invalidateLiveWorkload()
                 endLiveSession("authentication restart", resumeHistory = false)

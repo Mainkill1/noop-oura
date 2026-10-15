@@ -40,6 +40,10 @@ internal class OuraWriteQueue(
         pump()
     }
 
+    // Raw reads may cancel only work the stack has not accepted. Never replay an uncertain write.
+    @Synchronized fun cancelPending(command: OuraCommand): Boolean = pending.removeAll { it === command }
+    val idle: Boolean @Synchronized get() = !closed && !finishing && inFlight == null && pending.isEmpty()
+
     /** Invalidate removed starts immediately; only new starts wait for the source's settling budget. */
     @Synchronized fun reconcileLive(selection: OuraLiveSelection, allowStarts: Boolean) {
         if (closed || finishing) return

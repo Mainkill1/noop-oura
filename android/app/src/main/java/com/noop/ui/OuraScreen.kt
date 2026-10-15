@@ -37,6 +37,9 @@ fun OuraScreen(vm: AppViewModel, onDevices: () -> Unit, onImport: () -> Unit, on
     val activeIsOura by vm.activeIsOura.collectAsStateWithLifecycle()
     val ringLinkPhase by vm.ouraLinkPhase.collectAsStateWithLifecycle()
     val liveSession by vm.ouraLiveSession.collectAsStateWithLifecycle()
+    val rawState by vm.ouraRawInstruments.collectAsStateWithLifecycle()
+    var rawChannel by rememberSaveable { mutableStateOf("event:80") }
+    var rawInterval by rememberSaveable { mutableLongStateOf(2000) }
     val historyPhase by vm.ouraHistorySyncPhase.collectAsStateWithLifecycle()
     val oxygenStatus by vm.ouraOxygenFeatureStatus.collectAsStateWithLifecycle()
     val recentDays by vm.recentDays.collectAsStateWithLifecycle()
@@ -56,7 +59,8 @@ fun OuraScreen(vm: AppViewModel, onDevices: () -> Unit, onImport: () -> Unit, on
     var elapsedNow by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
     val source = sources.firstOrNull { it.id == sourceId }
     val imported = source?.isImport == true
-    val isLive = mode == OuraViewMode.Live
+    val isRaw = category == OuraCategory.Raw
+    val isLive = mode == OuraViewMode.Live && !isRaw
     val liveEligible = activeIsOura && source != null && !imported && sourceId == activeId
     val zone = ZoneId.systemDefault()
     val historyFrom = day.plusDays(1).minusDays(days.toLong()).atStartOfDay(zone).toEpochSecond()
@@ -85,13 +89,16 @@ fun OuraScreen(vm: AppViewModel, onDevices: () -> Unit, onImport: () -> Unit, on
             }
         }
     }
+    val rawOwner = remember(vm) { OuraRawOwner { intent ->
+        vm.rawOuraIntent(intent.sourceId, intent.incarnation, intent.generation, intent.channel, intent.intervalMs, intent.foreground)
+    } }
     SideEffect {
         owner.observe(liveSession)
         pendingStart = owner.hasOwnership && !liveSession.active
     }
     // Monotonic display clock never creates or requests samples.
-    LaunchedEffect(isLive, lifecycle) {
-        if (isLive) lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+    LaunchedEffect(isLive, isRaw, lifecycle) {
+        if (isLive || isRaw) lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             while (true) { elapsedNow = SystemClock.elapsedRealtime(); delay(100) }
         }
     }
@@ -113,7 +120,7 @@ fun OuraScreen(vm: AppViewModel, onDevices: () -> Unit, onImport: () -> Unit, on
             }
             val choice = sources.first { it.id == sourceId }
             selected = choice
-            if (isLive && category != OuraCategory.Health) {
+            if (isRaw || (isLive && category != OuraCategory.Health)) {
                 loading = false
                 return@refreshOuraWindow false
             }
@@ -155,10 +162,12 @@ fun OuraScreen(vm: AppViewModel, onDevices: () -> Unit, onImport: () -> Unit, on
     var liveComparisonCsv by rememberSaveable { mutableStateOf("hr,x,y,z") }
     val liveComparison = liveComparisonCsv.split(',').filter { it in listOf("hr", "x", "y", "z") }.toSet()
     val visibleSession = ouraLiveSnapshotForSource(liveSession, sourceId)
-    OuraLiveLifecycle(owner, lifecycle, sourceId, isLive, liveSession,
+    OuraLiveLifecycle(owner, lifecycle, sourceId, isLive || (isRaw && rawChannel in setOf("hr", "motion")), liveSession,
         ready = liveEligible && liveSession.sourceDeviceId == sourceId &&
             ringLinkPhase == com.noop.ble.OuraLiveSource.LinkPhase.AUTHENTICATED,
-        selection = ouraLiveSelection(category, liveComparison))
+        selection = if (isRaw) com.noop.ble.OuraLiveSelection(hr = rawChannel == "hr", motion = rawChannel == "motion") else ouraLiveSelection(category, liveComparison))
+    OuraRawLifecycle(rawOwner, lifecycle, rawState, sourceId, isRaw,
+        liveEligible && ringLinkPhase == com.noop.ble.OuraLiveSource.LinkPhase.AUTHENTICATED, rawChannel, rawInterval)
     fun changeCategory(next: OuraCategory) {
         category = next
     }
@@ -183,7 +192,11 @@ fun OuraScreen(vm: AppViewModel, onDevices: () -> Unit, onImport: () -> Unit, on
                 onSource = { if (sourceId != it) owner.hide(); sourceId = it }, onDay = { landedSource = sourceId; dayEpoch = it.toEpochDay() },
                 onDays = { landedSource = sourceId; days = it }, onRanges = { showRange = it },
                 onRefresh = { revision++ }, onDevices = onDevices, onImport = onImport,
-                onKeys = { showKeyTransfer = true }, isLive = isLive)
+                onKeys = { showKeyTransfer = true }, isLive = isLive || isRaw)
+        }
+        if (isRaw) item(key = "raw-panel", contentType = "raw") {
+            OuraRawPanel(rawState.takeIf { it.sourceDeviceId == sourceId } ?: com.noop.ble.OuraRawState(), elapsedNow, rawChannel, rawInterval,
+                liveEligible, ringLinkPhase == com.noop.ble.OuraLiveSource.LinkPhase.AUTHENTICATED, { rawChannel = it }, { rawInterval = it })
         }
         if (isLive) item(key = "live-panel", contentType = "live") {
             OuraLivePanel(visibleSession, elapsedNow, category, liveComparison,
@@ -198,14 +211,14 @@ fun OuraScreen(vm: AppViewModel, onDevices: () -> Unit, onImport: () -> Unit, on
         if (isLive && category == OuraCategory.Health && snapshot != null) item(key = "recorded-health") {
             OuraRecordedHealth(snapshot, tempUnit, onHistory = { owner.hide(); mode = OuraViewMode.History })
         }
-        if (failed) item(key = "error", contentType = "status") {
+        if (failed && !isRaw) item(key = "error", contentType = "status") {
             Column(verticalArrangement = Arrangement.spacedBy(Metrics.space8)) {
                 DataPendingNote(stringResource(R.string.oura_title), stringResource(
                     if (snapshot != null) R.string.oura_refresh_error else R.string.oura_load_error))
                 NoopButton(stringResource(R.string.oura_retry), kind = NoopButtonKind.Secondary, onClick = { revision++ })
             }
         }
-        if (!isLive && snapshot == null && !failed) item(key = "loading", contentType = "status") {
+        if (!isLive && !isRaw && snapshot == null && !failed) item(key = "loading", contentType = "status") {
             OuraPanel {
                 Column(verticalArrangement = Arrangement.spacedBy(Metrics.space8)) {
                     LinearProgressIndicator(Modifier.fillMaxWidth(), color = Palette.accent)
@@ -213,7 +226,7 @@ fun OuraScreen(vm: AppViewModel, onDevices: () -> Unit, onImport: () -> Unit, on
                 }
             }
         }
-        if (!isLive && snapshot != null) {
+        if (!isLive && !isRaw && snapshot != null) {
             if (category == OuraCategory.Compare) item(key = "compare:$sourceId", contentType = "compare") {
                 OuraComparisonCard(allKeys, displaySignals, window.from, window.to, imported, tempUnit, comparison,
                     { comparisonCsv = it.joinToString(",") })

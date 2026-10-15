@@ -1,7 +1,7 @@
 package com.noop.ui
 
 internal enum class OuraViewMode { History, Live }
-internal enum class OuraCategory { Health, Sleep, Movement, Compare }
+internal enum class OuraCategory { Health, Sleep, Movement, Compare, Raw }
 
 /** One catalog drives category summaries, charts, and the cross-category comparison picker. */
 internal fun ouraCategoryKeys(imported: Boolean, category: OuraCategory): List<String> {
@@ -15,5 +15,6 @@ internal fun ouraCategoryKeys(imported: Boolean, category: OuraCategory): List<S
         OuraCategory.Sleep -> sleep
         OuraCategory.Movement -> movement
         OuraCategory.Compare -> health + sleep + movement
+        OuraCategory.Raw -> emptyList()
     }
 }

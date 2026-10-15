@@ -171,6 +171,14 @@ class SourceCoordinator(
      *  WHOOP BLE client, so the WHOOP path cannot regress. (An Oura ring additionally surfaces only its OWN
      *  raw signals + open event tags — NOOP computes its own Charge/Rest — never Oura's encrypted scores.) */
     @Volatile private var activeSource: LiveHrSource? = null
+    private val _ouraRawInstruments = MutableStateFlow(OuraRawState())
+    val ouraRawInstruments: StateFlow<OuraRawState> = _ouraRawInstruments.asStateFlow()
+    fun rawOuraIntent(expectedSourceDeviceId: String, incarnation: Long, generation: Long,
+        channel: String?, intervalMs: Long, foreground: Boolean) {
+        if (activeStrapId != expectedSourceDeviceId) return
+        (activeSource as? OuraLiveSource)?.rawInstrumentsIntent(expectedSourceDeviceId, incarnation, generation,
+            channel, intervalMs, foreground)
+    }
     private val _ouraLiveSession = MutableStateFlow(OuraLiveSessionSnapshot())
     val ouraLiveSession: StateFlow<OuraLiveSessionSnapshot> = _ouraLiveSession.asStateFlow()
     private val _ouraHistorySyncPhase = MutableStateFlow(OuraHistorySyncPhase.IDLE)
@@ -631,6 +639,7 @@ class SourceCoordinator(
             launch { source.ouraWearState.collect { _ouraWearState.value = it } }
             launch { source.batteryPct.collect { _ouraBatteryPct.value = it } }   // #2075
             launch { source.liveSession.collect { _ouraLiveSession.value = it } }
+            launch { source.rawInstruments.collect { _ouraRawInstruments.value = it } }
             launch { source.oxygenFeatureStatus.collect { _ouraOxygenFeatureStatus.value = it } }
             launch { source.historySyncPhase.collect { _ouraHistorySyncPhase.value = it } }
             launch { source.linkPhase.collect { _ouraLinkPhase.value = it } }     // #2305
@@ -684,6 +693,7 @@ class SourceCoordinator(
         _ouraWearState.value = null   // #628: no live Oura source -> no wear badge
         _ouraBatteryPct.value = null  // #2075: nor a stale ring charge
         _ouraLiveSession.value = OuraLiveSessionSnapshot()
+        _ouraRawInstruments.value = OuraRawState()
         _ouraOxygenFeatureStatus.value = null
         _ouraHistorySyncPhase.value = OuraHistorySyncPhase.IDLE
         _ouraLinkPhase.value = OuraLiveSource.LinkPhase.DISCONNECTED   // #2305

@@ -57,7 +57,7 @@ internal fun OuraLivePanel(snapshot: OuraLiveSessionSnapshot, nowElapsedMs: Long
         OuraCategory.Health -> setOf("hr")
         OuraCategory.Movement -> axes
         OuraCategory.Compare -> comparison
-        OuraCategory.Sleep -> emptySet()
+        OuraCategory.Sleep, OuraCategory.Raw -> emptySet()
     }
     val colors = listOf(Palette.accent, Palette.metricRose, Palette.metricAmber, Palette.metricPurple)
     val allTraces = listOf("hr", "x", "y", "z").mapIndexed { index, key ->

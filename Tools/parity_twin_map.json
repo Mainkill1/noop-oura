@@ -18,17 +18,17 @@
     ]
   },
   "authority": {
-    "files": {"count": 519, "sha256": "4f5f616f159625bc73650030f66b0844ede81adf092d2adfa6149ce07ebc53d5"},
-    "functions": {"count": 4581, "sha256": "1dba3ec1e752387c11342ea5d48edfda01716c5ac5aebee023aeab2ee2bcaa28"},
+    "files": {"count": 521, "sha256": "7869fcbc9cc4cb45cf5dca9acd5ee3a9e1fcc5cdb073019af4b86a4d80e58952"},
+    "functions": {"count": 4599, "sha256": "4a7ad801c7ed077cdb7b0caa8617194c4d565bebe520d1de65f623387d1650bc"},
     "properties": {"count": 497, "sha256": "57f674ea805550ce8d39501e4eef562a739ec24bf48e93b67cfddc23d8b54b6e"},
-    "constants": {"count": 2011, "sha256": "274179227ffdff2e6c2afb05774e025642aa805d5c09343823f7fae9efd56240"},
-    "file_pairs": {"count": 85, "sha256": "8bf5f0bc1fb9d447a875f3b3eba26304213cc2c445842aee21dd936038536c12"},
-    "function_pairs": {"count": 236, "sha256": "b90799a8c07bb3368fd3121a75304a6b0add7784869b701f610ebcd8e1140e26"},
+    "constants": {"count": 2016, "sha256": "002509652803586e503e11c9d8d050985df6e523959a3004a69cf20db787e38f"},
+    "file_pairs": {"count": 86, "sha256": "80c3e779b2f5c085974e9dce97a496a5c6fb69e45544ee61a74bc7955e5fdf97"},
+    "function_pairs": {"count": 245, "sha256": "c05516a231ed2ae9795d080d65c728565c9ac345b0875e33862d05653ebebbd5"},
     "property_pairs": {"count": 164, "sha256": "33c02b4132a0d5e2d826a2b5d4d13379c05c1690e83c58365c3c9da2cd176032"},
     "constant_pairs": {"count": 705, "sha256": "e609e0c5cca8c6be4af021096a9e1008fd3c63e8a52dc69d17ec1de23626f165"},
     "unpaired_files": {"count": 372, "sha256": "6c0d9979da7e681cc78d0995d488992ca1cbe1b74ac817116ad10ba16a8a902c"},
     "unpaired_functions": {"count": 4122, "sha256": "cf47eb942a38d79ccab8ec8f5254166454d4ad5c9e7c1640419237f4e3b38992"},
     "unpaired_properties": {"count": 169, "sha256": "4cd02bead7dea0217b378b250c502c82673262ddf2bb3df4633fa14158781b5e"},
-    "unpaired_constants": {"count": 601, "sha256": "8b3d23135ef8a7385bf99d1988e8b48ffb08e95890fdab990aa3fecaaa159e6a"}
+    "unpaired_constants": {"count": 606, "sha256": "6e105fda4e31751fbc7e2d5e4b0973d81c3321f98ce2f36cb31f8d9512e275c6"}
   }
 }

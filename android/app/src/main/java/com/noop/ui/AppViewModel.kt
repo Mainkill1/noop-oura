@@ -219,6 +219,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Read-only configuration report; an enabled mode is not evidence of an oxygen sample. */
     val ouraOxygenFeatureStatus: StateFlow<com.noop.oura.OuraFeatureStatus?>
         get() = noopApp.sourceCoordinator.ouraOxygenFeatureStatus
+    val ouraRawInstruments: StateFlow<com.noop.ble.OuraRawState>
+        get() = noopApp.sourceCoordinator.ouraRawInstruments
+    fun rawOuraIntent(sourceId: String, incarnation: Long, generation: Long, channel: String?, intervalMs: Long, foreground: Boolean) =
+        noopApp.sourceCoordinator.rawOuraIntent(sourceId, incarnation, generation, channel, intervalMs, foreground)
     /** Direct notification buffers for a page-owned live session; no database polling. */
     val ouraLiveSession: StateFlow<com.noop.ble.OuraLiveSessionSnapshot>
         get() = noopApp.sourceCoordinator.ouraLiveSession
