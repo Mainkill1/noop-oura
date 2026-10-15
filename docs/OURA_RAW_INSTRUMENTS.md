@@ -124,8 +124,10 @@ credentials and health data never left the phone. No reset, takeover or ring-key
 The first final synthetic device run executed 34 cases: 33 passed. The remaining Raw navigation
 clearance assertion measured visibility before reaching the scroll end. Its fixture now consumes
 the trailing padding, requires the true scroll end and retains the original unclipped physical
-clearance assertion. The instrumentation APK compiles; its focused device rerun awaits phone unlock. The signed release
-subsequently authenticated successfully with the existing ring key in a new release-app session.
+clearance assertion. Its focused OnePlus 15 rerun passes, and the synthetic screenshot confirms
+the final detail clears the measured navigation overlay. All 34 distinct non-key fixtures have now
+passed across the initial run and this corrected-case rerun; this is not a second full-suite run.
+The signed release authenticated successfully with the existing ring key in a new release-app session.
 The installed APK digest matches the distributed asset. The debug package is disabled, retaining
 its data and Keystore for rollback; the original staging package remains stopped. The migration
 also restores target ownership and SELinux categories for copied app data. Continuous motion lease
