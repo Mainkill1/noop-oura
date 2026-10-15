@@ -1,6 +1,7 @@
 package com.noop.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -102,9 +103,21 @@ class OuraRawDeviceTest {
             compose.onNodeWithTag("oura-raw-interval-250").performScrollTo().performClick()
             compose.runOnIdle { assertEquals(250L, interval) }
             compose.onNodeWithTag("oura-raw-last-detail").performScrollTo().assertIsDisplayed()
+            val beforeDetail = compose.onNodeWithTag("oura-raw-last-detail").getUnclippedBoundsInRoot()
+            var couldScrollFurther = false
+            // Visibility in the list viewport does not account for a sibling navigation overlay.
+            // Consume the remaining trailing padding before measuring clearance at the actual end.
+            compose.runOnIdle {
+                couldScrollFurther = listState.canScrollForward
+                kotlinx.coroutines.runBlocking {
+                    listState.scrollBy(listState.layoutInfo.viewportSize.height.toFloat())
+                }
+            }
+            compose.runOnIdle { assertFalse("Clearance must be measured at the scroll end", listState.canScrollForward) }
             val detail = compose.onNodeWithTag("oura-raw-last-detail").getUnclippedBoundsInRoot()
             val overlay = compose.onNodeWithTag("synthetic-raw-overlay").getUnclippedBoundsInRoot()
-            assertTrue("Raw detail must clear measured bottom navigation", detail.bottom <= overlay.top)
+            assertTrue("Raw detail must clear measured bottom navigation: before=$beforeDetail, " +
+                "couldScrollFurther=$couldScrollFurther, after=$detail, overlay=$overlay", detail.bottom <= overlay.top)
             capture("raw-bottom-clearance-synthetic")
         } finally { compose.runOnIdle { BottomBarStyleStore.barHeight = originalHeight } }
     }
