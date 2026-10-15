@@ -62,15 +62,22 @@ and history yielding/resuming. Receipt-to-display under 250 ms remains unmeasure
 
 UI Start/Update/Stop calls set one desired selection in `OuraLiveWorkload`. A single
 main-loop worker reconciles it at a fixed 150 ms settling interval; repeated Start
-is idempotent and Stop cancels pending work immediately. Rapid revisions replace
-pending live commands in the existing serialized queue. An already accepted write
-completes first, followed by explicit shutdowns, then only the final desired enables.
-A stopped or superseded generation cannot feed session buffers. Requests carry the
-expected source id and generation; the pre-Start generation remains an owner alias
-until Stop, so immediate screen disposal can cancel a pending Start safely. Selection changes
+is idempotent and Stop cancels pending work immediately. Removed channels invalidate
+pending enables as soon as their intent is accepted. The serialized queue preserves
+retained channels and already queued OFFs; only added channels start after settling.
+An accepted write completes before the necessary OFFs and new enables. Healthy
+retained channels keep receiving and retain their first-sample timer while another
+channel changes. Activity lifecycle observation covers pending Start as well.
+A stopped or superseded generation cannot feed session buffers. Generation is an
+opaque token with a process-unique source-incarnation namespace, so recreating the
+same registry source does not reuse ownership. Requests carry the expected source
+id and generation; the pre-Start generation remains an owner alias until Stop, so
+immediate screen disposal can cancel a pending Start safely. Selection changes
 retain the first motion deadline; they never silently extend or recreate a session.
 History finishes its current page, flushes progress at its quiet boundary, then yields.
-It resumes from the durable cursor when the live session stops. No pause opcode is sent.
+It resumes from the durable cursor only after live OFF writes complete locally,
+through a current-queue and generation-checked completion barrier. A pending Start
+cancels that resume. No pause opcode is sent.
 
 Each requested channel gets ten seconds for its first sample. A silent channel is
 marked unavailable and disabled once without automatic retry; the other channel

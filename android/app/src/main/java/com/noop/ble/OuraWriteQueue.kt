@@ -1,6 +1,7 @@
 package com.noop.ble
 
 import com.noop.oura.OuraCommand
+import com.noop.oura.OuraCommands
 
 /** One outstanding Android write per connection. An uncertain write is never replayed. */
 internal class OuraWriteQueue(
@@ -16,27 +17,73 @@ internal class OuraWriteQueue(
     private var closed = false
     private var finishing = false
     private var onDrained: (() -> Unit)? = null
+    private var onLiveStopped: (() -> Unit)? = null
+    private var liveSelection: OuraLiveSelection? = null
+    private var hrModeMayBeEnabled = false
+    private var hrSubscriptionMayBeEnabled = false
+    private var motionMayBeEnabled = false
 
     @Synchronized fun enqueue(command: OuraCommand) {
-        if (closed || finishing) return
+        if (closed || finishing || obsoleteEnable(command)) return
         pending.addLast(command)
         pump()
     }
 
-    @Synchronized fun replaceLiveCommands(commands: List<OuraCommand>) {
+    /** Invalidate removed starts immediately; only new starts wait for the source's settling budget. */
+    @Synchronized fun reconcileLive(selection: OuraLiveSelection, allowStarts: Boolean) {
         if (closed || finishing) return
-        pending.removeAll { it.label in LIVE_LABELS }
-        pending.addAll(commands)
+        liveSelection = selection
+        pending.removeAll(::obsoleteEnable)
+        // Project only writes that will precede appended work. OFFs already accepted/queued stay ordered.
+        var mode = hrModeMayBeEnabled
+        var subscription = hrSubscriptionMayBeEnabled
+        var motion = motionMayBeEnabled
+        fun project(command: OuraCommand) {
+            when (command.label) {
+                "dhr_enable" -> mode = true
+                "dhr_subscribe" -> subscription = true
+                "dhr_disable" -> mode = false
+                "dhr_unsubscribe" -> subscription = false
+                "acm_start" -> motion = true
+                "acm_stop" -> motion = false
+            }
+        }
+        inFlight?.let(::project)
+        pending.forEach(::project)
+        if (!selection.hr && (mode || subscription)) {
+            pending.add(OuraCommands.liveHRDisable())
+            pending.add(OuraCommands.liveHRUnsubscribe())
+        }
+        if (!selection.motion && motion) pending.add(OuraCommands.liveMotionStop())
+        if (allowStarts) {
+            if (selection.hr && !mode) pending.add(OuraCommands.liveHREnable())
+            if (selection.hr && !subscription) pending.add(OuraCommands.liveHRSubscribe())
+            if (selection.motion && !motion) pending.add(OuraCommands.liveMotionStart())
+        }
         pump()
     }
+
+    /** Completion barrier: zero-mask and HR OFFs must complete, never merely enter the queue. */
+    @Synchronized fun whenLiveStopped(action: () -> Unit) {
+        if (closed || finishing) return
+        onLiveStopped = action
+        notifyLiveStopped()
+    }
+    @Synchronized fun cancelLiveStoppedCallback() { onLiveStopped = null }
 
     @Synchronized fun complete(success: Boolean) {
         val command = inFlight ?: return
         if (!success) { fail(command, Failure.COMPLETION_FAILED); return }
         inFlight = null
+        when (command.label) {
+            "dhr_disable" -> hrModeMayBeEnabled = false
+            "dhr_unsubscribe" -> hrSubscriptionMayBeEnabled = false
+            "acm_stop" -> motionMayBeEnabled = false
+        }
         onCompleted(command)
         onFinished()
         pump()
+        notifyLiveStopped()
     }
 
     @Synchronized fun timeout(command: OuraCommand) {
@@ -46,6 +93,7 @@ internal class OuraWriteQueue(
     @Synchronized fun close() {
         closed = true
         onDrained = null
+        onLiveStopped = null
         pending.clear()
         val active = inFlight != null
         inFlight = null
@@ -56,6 +104,7 @@ internal class OuraWriteQueue(
     @Synchronized fun finishWith(commands: List<OuraCommand>, drained: () -> Unit) {
         if (closed) { drained(); return }
         finishing = true
+        onLiveStopped = null
         pending.clear()
         pending.addAll(commands)
         onDrained = drained
@@ -64,17 +113,40 @@ internal class OuraWriteQueue(
 
     private fun pump() {
         if (closed || inFlight != null) return
-        val command = pending.pollFirst()
+        var command = pending.pollFirst()
+        while (command != null && obsoleteEnable(command)) command = pending.pollFirst()
         if (command == null) {
+            notifyLiveStopped()
             val drained = onDrained
             if (drained != null) { close(); drained() }
             return
         }
         inFlight = command
+        when (command.label) {
+            "dhr_enable" -> hrModeMayBeEnabled = true
+            "dhr_subscribe" -> hrSubscriptionMayBeEnabled = true
+            "acm_start" -> motionMayBeEnabled = true
+        }
         onStarted(command)
         val accepted = submit(command)
         // A callback may run before submit returns; never fail a later command in that case.
         if (!accepted && inFlight === command) fail(command, Failure.REJECTED)
+    }
+
+    private fun obsoleteEnable(command: OuraCommand): Boolean {
+        val desired = liveSelection ?: return false
+        return when (command.label) {
+            "dhr_enable", "dhr_subscribe" -> !desired.hr
+            "acm_start" -> !desired.motion
+            else -> false
+        }
+    }
+    private fun notifyLiveStopped() {
+        if (closed || finishing || hrModeMayBeEnabled || hrSubscriptionMayBeEnabled || motionMayBeEnabled) return
+        if (inFlight?.label in LIVE_LABELS || pending.any { it.label in LIVE_LABELS }) return
+        val callback = onLiveStopped ?: return
+        onLiveStopped = null
+        callback()
     }
 
     private fun fail(command: OuraCommand, reason: Failure) {

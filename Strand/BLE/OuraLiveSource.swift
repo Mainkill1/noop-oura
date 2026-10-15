@@ -1201,8 +1201,8 @@ public final class OuraLiveSource: NSObject, ObservableObject {
     }
 
     /// Record a STORED history sample's ring-time toward the resume cursor (open_oura `nextEventToSync`).
-    /// Called only where a sample resolved a REAL anchored time and was enqueued — never for a no-anchor
-    /// wall-clock fallback. Also flags a reboot: a real sample older than where we sought this fetch.
+    /// Called only where a sample resolved a REAL anchored time and was enqueued; unresolved records
+    /// remain pending for an anchor or retry. Also flags a reboot: a real sample older than where we sought this fetch.
     private func noteStoredHistoryRingTime(_ rt: UInt32) {
         // A ring-time above the plausibility ceiling is corrupt; letting it set the resume cursor would
         // seek the next session into nonsense. Bounds the cursor at the source.

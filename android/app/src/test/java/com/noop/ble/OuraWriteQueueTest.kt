@@ -116,4 +116,47 @@ class OuraWriteQueueTest {
         queue.enqueue(command("notify_all")); queue.enqueue(command("get_nonce"))
         assertEquals(listOf("start:notify_all", "send:notify_all", "finish", "start:get_nonce", "send:get_nonce", "finish"), events)
     }
+    @Test fun desiredRemovalInvalidatesPendingStartsBeforeOutstandingCompletion() {
+        val sent = mutableListOf<String>()
+        val queue = OuraWriteQueue(submit = { sent.add(it.label); true })
+        queue.enqueue(command("get_battery"))
+        queue.reconcileLive(OuraLiveSelection(motion = true), allowStarts = true)
+        queue.reconcileLive(OuraLiveSelection(hr = true), allowStarts = false)
+        repeat(8) { queue.complete(true) }
+        assertEquals(listOf("get_battery"), sent)
+    }
+    @Test fun retainedMotionHasNoOffOrRestartWhenHrChanges() {
+        val sent = mutableListOf<String>()
+        val queue = OuraWriteQueue(submit = { sent.add(it.label); true })
+        queue.reconcileLive(OuraLiveSelection(motion = true), allowStarts = true)
+        repeat(8) { queue.complete(true) }
+        sent.clear()
+        queue.reconcileLive(OuraLiveSelection(true,true), allowStarts = true)
+        repeat(8) { queue.complete(true) }
+        assertEquals(listOf("dhr_enable", "dhr_subscribe"), sent)
+        sent.clear()
+        queue.reconcileLive(OuraLiveSelection(motion = true), allowStarts = false)
+        repeat(8) { queue.complete(true) }
+        assertEquals(listOf("dhr_disable", "dhr_unsubscribe"), sent)
+    }
+    @Test fun stoppedBarrierWaitsForActualOffCompletionAndCanBeCancelled() {
+        val queue = OuraWriteQueue(submit = { true })
+        queue.reconcileLive(OuraLiveSelection(motion = true), allowStarts = true)
+        repeat(8) { queue.complete(true) }
+        queue.reconcileLive(OuraLiveSelection(), allowStarts = false)
+        var resumed = false
+        queue.whenLiveStopped { resumed = true }
+        assertFalse(resumed)
+        queue.complete(true)
+        assertTrue(resumed)
+        queue.reconcileLive(OuraLiveSelection(motion = true), allowStarts = true)
+        repeat(8) { queue.complete(true) }
+        queue.reconcileLive(OuraLiveSelection(), allowStarts = false)
+        var stale = false
+        queue.whenLiveStopped { stale = true }
+        queue.cancelLiveStoppedCallback()
+        queue.complete(true)
+        assertFalse(stale)
+    }
+
 }

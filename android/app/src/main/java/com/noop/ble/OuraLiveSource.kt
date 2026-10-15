@@ -489,6 +489,7 @@ class OuraLiveSource(
     private var lastWriteAccepted: Boolean? = null
     private val liveHRDemand = OuraLiveHRDemand()
     @Volatile private var writeSession: WriteSession? = null
+    @Volatile private var commandQueue: OuraWriteQueue? = null
     private val retiringWrites = ConcurrentHashMap<BluetoothGatt, WriteSession>()
 
     /** Queue, timer, and callback ownership belong to one immutable GATT session. */
@@ -1316,6 +1317,7 @@ class OuraLiveSource(
         val shutdown = shutdownCommands()
         gatt = null
         writeSession = null
+        commandQueue = null
         if (previousGatt != null && previousWrites?.link === previousGatt && shutdown.isNotEmpty()) {
             retiringWrites[previousGatt] = previousWrites
             previousWrites.retire(shutdown)
@@ -1460,6 +1462,7 @@ class OuraLiveSource(
         val previousWrites = writeSession
         gatt = null
         writeSession = null
+        commandQueue = null
         if (previousGatt != null && previousWrites?.link === previousGatt && shutdown.isNotEmpty()) {
             retiringWrites[previousGatt] = previousWrites
             previousWrites.retire(shutdown)
@@ -1801,7 +1804,7 @@ class OuraLiveSource(
         }
         val writeCharacteristic = requireNotNull(writeChar)
         closeWriteQueue()
-        writeSession = WriteSession(g, writeCharacteristic)
+        writeSession = WriteSession(g, writeCharacteristic).also { commandQueue = it.queue }
         log("Oura: write + notify characteristics found - enabling notifications on the notify char")
         g.setCharacteristicNotification(notify, true)
         val cccd = notify.getDescriptor(CCCD)
@@ -1957,7 +1960,7 @@ class OuraLiveSource(
     /** Write one built command to the ring's write characteristic (Write Without Response). Logged by its
      *  short label only (never bytes or an address). */
     private fun write(cmd: OuraCommand) = guardedCallback("write") {
-        writeSession?.queue?.enqueue(cmd)
+        commandQueue?.enqueue(cmd)
     }
 
     private fun shutdownCommands(): List<OuraCommand> = buildList {
@@ -1967,7 +1970,9 @@ class OuraLiveSource(
 
     private fun closeWriteQueue() {
         val owner = writeSession
+        commandQueue?.close()
         writeSession = null
+        commandQueue = null
         owner?.close()
     }
 
@@ -2023,13 +2028,14 @@ class OuraLiveSource(
     }
     private fun invalidateLiveWorkload() {
         liveOwnerPreviousGeneration = null
+        commandQueue?.cancelLiveStoppedCallback()
         liveTransportDirty = false
         liveWorkload.stop()
         liveWorkload.drain()
         handler.removeCallbacks(liveWorker)
         liveWorkScheduled = false
     }
-    private val _liveSession = MutableStateFlow(OuraLiveSessionSnapshot())
+    private val _liveSession = MutableStateFlow(OuraLiveSessionSnapshot(sourceDeviceId = deviceId, generation = liveWorkload.generation))
     val liveSession: StateFlow<OuraLiveSessionSnapshot> = _liveSession.asStateFlow()
     private val _historySyncPhase = MutableStateFlow(OuraHistorySyncPhase.IDLE)
     val historySyncPhase: StateFlow<OuraHistorySyncPhase> = _historySyncPhase.asStateFlow()
@@ -2058,6 +2064,7 @@ class OuraLiveSource(
                 motionUnavailable = motionUnavailable || failedMotion
                 sessionMemory.unavailable(failedHr, failedMotion, now)
                 log("Oura: no first sample within 10s (HR=$failedHr, ACM=$failedMotion); silent channel disabled without retry")
+                acceptLiveSelection(sessionMemory.snapshot.selection)
                 liveTransportDirty = true
                 scheduleLiveWorker()
             }
@@ -2090,9 +2097,15 @@ class OuraLiveSource(
                          expectedGeneration: Long? = null) = onGattThread("live-start") {
         if (!ownsLiveSession(expectedDeviceId, expectedGeneration)) return@onGattThread
         if (!reachedStreaming || driver?.phase !in setOf(OuraDriverPhase.Streaming, OuraDriverPhase.FetchingHistory)) return@onGattThread
+        if (!selection.hr && !selection.motion) return@onGattThread
+        if (!liveLifecycleRegistered) {
+            (appContext as? Application)?.registerActivityLifecycleCallbacks(liveLifecycle)
+            liveLifecycleRegistered = true
+        }
         val previousGeneration = liveWorkload.generation
         liveWorkload.start(selection)
         if (liveWorkload.generation != previousGeneration) liveOwnerPreviousGeneration = previousGeneration
+        acceptLiveSelection(selection)
         scheduleLiveWorker()
     }
     fun updateLiveSession(selection: OuraLiveSelection, expectedDeviceId: String = deviceId,
@@ -2103,6 +2116,7 @@ class OuraLiveSource(
             return@onGattThread
         }
         liveWorkload.update(selection)
+        if (liveWorkload.hasDemand) acceptLiveSelection(selection)
         scheduleLiveWorker()
     }
     fun stopLiveSession(expectedDeviceId: String = deviceId, expectedGeneration: Long? = null) = onGattThread("live-stop") {
@@ -2112,6 +2126,15 @@ class OuraLiveSource(
         invalidateLiveWorkload()
         endLiveSession(liveStopReason)
     }
+    private fun acceptLiveSelection(selection: OuraLiveSelection) {
+        liveTransportDirty = true
+        commandQueue?.cancelLiveStoppedCallback()
+        if (!selection.hr) hrRequestedAt = null
+        if (!selection.motion) motionRequestedAt = null
+        val effective = selection.copy(hr = selection.hr && !hrUnavailable, motion = selection.motion && !motionUnavailable)
+        commandQueue?.reconcileLive(effective, allowStarts = false)
+    }
+
     private fun applyLiveSelection() {
         val requested = sessionMemory.snapshot.selection
         val now = SystemClock.elapsedRealtime()
@@ -2129,12 +2152,8 @@ class OuraLiveSource(
                 handler.postDelayed(liveDeadline, (deadline - now).coerceAtLeast(0))
             }
         }
-        // Replace stale pending enables. An accepted write completes first, then shutdowns precede starts.
-        val commands = shutdownCommands() + buildList {
-            if (selection.hr) addAll(listOf(OuraCommands.liveHREnable(), OuraCommands.liveHRSubscribe()))
-            if (selection.motion) add(OuraCommands.liveMotionStart())
-        }
-        writeSession?.queue?.replaceLiveCommands(commands)
+        // Queue state preserves retained channels and pending OFFs; only missing starts are appended.
+        commandQueue?.reconcileLive(selection, allowStarts = true)
         if (driver?.phase == OuraDriverPhase.Streaming) {
             historyPausedForLive = true
             _historySyncPhase.value = OuraHistorySyncPhase.PAUSED_FOR_LIVE
@@ -2152,14 +2171,22 @@ class OuraLiveSource(
         liveHRDemand.update(wanted = false, ready = reachedStreaming)
         cancelReengage()
         motionArmed = false
-        writeSession?.queue?.replaceLiveCommands(shutdownCommands())
+        val queue = commandQueue
+        queue?.reconcileLive(OuraLiveSelection(), allowStarts = false)
         publishLiveSession()
         if (wasActive) log("Oura: live session stopped ($reason; ACM packets=$liveMotionPackets samples=$liveMotionSamples)")
         if (resumeHistory && historyPausedForLive) {
-            historyPausedForLive = false
-            flush()
-            log("Oura: resuming history after live session")
-            fetchHistoryIfIdle()
+            val stoppedGeneration = liveWorkload.generation
+            val resume = {
+                if (commandQueue === queue && liveWorkload.generation == stoppedGeneration &&
+                    !liveWorkload.hasDemand && !sessionMemory.snapshot.active && historyPausedForLive) {
+                    historyPausedForLive = false
+                    flush()
+                    log("Oura: resuming history after live OFF completion")
+                    fetchHistoryIfIdle()
+                }
+            }
+            if (queue == null) resume() else queue.whenLiveStopped(resume)
         }
     }
 
@@ -2251,7 +2278,7 @@ class OuraLiveSource(
             }
             if (frame.op == 0x33) {
                 val packet = OuraLiveMotion.decode(frame)
-                if (completelyFramed && liveWorkload.acceptsSamples(liveGeneration) && packet != null && sessionMemory.noteMotion(packet, receivedAtElapsedMs)) {
+                if (completelyFramed && liveWorkload.acceptsSamples(liveGeneration, motion = true) && packet != null && sessionMemory.noteMotion(packet, receivedAtElapsedMs)) {
                     liveMotionPackets += 1
                     liveMotionSamples += packet.samples.size
                     if (liveMotionPackets == 1L) log("Oura: first valid ACM packet (${frame.body.size}B, metadata=${packet.metadataByte})")
@@ -2726,7 +2753,7 @@ class OuraLiveSource(
     /**
      * Stamp a history-fetched event with its ring-time-anchored UTC (s5.5) and enqueue it, or - when no
      * anchor has arrived yet this session - park it in [pendingAnchorEvents] to be re-stamped the moment
-     * one lands (drained by a 0x42 time-sync, or with an honest wall-clock fallback at teardown). Kotlin
+     * one lands; unresolved records remain pending and retryable without guessed timestamps. Kotlin
      * twin of the Swift `if let ts = driver.unixSeconds(...) { enqueue } else { pendingAnchorEvents.append }`
      * pattern repeated per history signal.
      */

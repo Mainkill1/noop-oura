@@ -3,11 +3,13 @@ package com.noop.ble
 /** One desired revision, reconciled by the source's single worker. UI calls never write the ring. */
 internal class OuraLiveWorkload {
     data class Change(val before: OuraLiveSelection?, val after: OuraLiveSelection?, val generation: Long, val newSession: Boolean)
-    @Volatile var generation = 0L
+    // Opaque token: incarnation namespace survives A -> B -> A recreation within the process.
+    @Volatile var generation = nextIncarnation.incrementAndGet() shl 32
         private set
     private var desired: OuraLiveSelection? = null
+    val hasDemand: Boolean get() = desired != null
     private var applied: OuraLiveSelection? = null
-    private var appliedGeneration = 0L
+    private var appliedGeneration = generation
     var unfinishedMotionDeadlineElapsedMs: Long? = null
         private set
     fun armMotionDeadline(now: Long): Long {
@@ -19,8 +21,11 @@ internal class OuraLiveWorkload {
         if (!sessionActive) unfinishedMotionDeadlineElapsedMs = null
     }
     fun resetMotionBudget() { unfinishedMotionDeadlineElapsedMs = null }
-    fun acceptsSamples(generation: Long): Boolean = generation == this.generation &&
-        appliedGeneration == generation && desired != null && desired == applied
+    fun acceptsSamples(generation: Long, motion: Boolean = false): Boolean {
+        if (generation != this.generation || appliedGeneration != generation) return false
+        return if (motion) desired?.motion == true && applied?.motion == true
+        else desired?.hr == true && applied?.hr == true
+    }
     fun start(selection: OuraLiveSelection) {
         if (!selection.hr && !selection.motion) return
         if (desired == null) generation += 1
@@ -40,4 +45,8 @@ internal class OuraLiveWorkload {
         appliedGeneration = generation
         return change
     }
+    private companion object {
+        val nextIncarnation = java.util.concurrent.atomic.AtomicLong()
+    }
+
 }

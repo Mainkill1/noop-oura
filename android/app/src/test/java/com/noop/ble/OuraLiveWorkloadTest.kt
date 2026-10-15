@@ -38,13 +38,11 @@ class OuraLiveWorkloadTest {
         val queue = OuraWriteQueue(submit = { sent.add(it.label); true })
         queue.enqueue(OuraCommands.getEvents(0, 255))
         repeat(200) {
-            queue.replaceLiveCommands(listOf(OuraCommands.liveHRDisable(), OuraCommands.liveHRUnsubscribe(),
-                OuraCommands.liveMotionStop(), OuraCommands.liveHREnable(), OuraCommands.liveHRSubscribe()))
-            queue.replaceLiveCommands(listOf(OuraCommands.liveHRDisable(), OuraCommands.liveHRUnsubscribe(),
-                OuraCommands.liveMotionStop(), OuraCommands.liveMotionStart()))
+            queue.reconcileLive(OuraLiveSelection(hr = true), allowStarts = true)
+            queue.reconcileLive(OuraLiveSelection(motion = true), allowStarts = true)
         }
         repeat(8) { queue.complete(true) }
-        assertEquals(listOf("get_events", "dhr_disable", "dhr_unsubscribe", "acm_stop", "acm_start"), sent)
+        assertEquals(listOf("get_events", "acm_start"), sent)
     }
     @Test fun pendingOrStoppedGenerationCannotDeliverSamples() {
         val work = OuraLiveWorkload()
@@ -56,7 +54,7 @@ class OuraLiveWorkloadTest {
         work.update(OuraLiveSelection(motion = true))
         assertFalse(work.acceptsSamples(old))
         work.drain()
-        assertTrue(work.acceptsSamples(old))
+        assertTrue(work.acceptsSamples(old, motion = true))
         work.stop()
         assertFalse(work.acceptsSamples(work.generation))
         work.start(OuraLiveSelection(hr = true))
@@ -74,6 +72,27 @@ class OuraLiveWorkloadTest {
         assertEquals(60_000L, work.armMotionDeadline(20_000))
         work.motionShutdownCompleted(sessionActive = false)
         assertEquals(90_000L, work.armMotionDeadline(30_000))
+    }
+
+    @Test fun eachSourceIncarnationHasAnIndependentOwnershipNamespace() {
+        val firstA = OuraLiveWorkload()
+        val otherB = OuraLiveWorkload()
+        val secondA = OuraLiveWorkload()
+        assertNotEquals(firstA.generation, otherB.generation)
+        assertNotEquals(firstA.generation, secondA.generation)
+        firstA.start(OuraLiveSelection(hr = true)); firstA.drain()
+        secondA.start(OuraLiveSelection(hr = true)); secondA.drain()
+        assertFalse(secondA.acceptsSamples(firstA.generation))
+    }
+
+    @Test fun retainedChannelKeepsReceivingWhileAnAddedChannelWaitsForWorker() {
+        val work = OuraLiveWorkload()
+        work.start(OuraLiveSelection(motion = true)); work.drain()
+        work.update(OuraLiveSelection(true,true))
+        assertTrue(work.acceptsSamples(work.generation, motion = true))
+        assertFalse(work.acceptsSamples(work.generation, motion = false))
+        work.drain()
+        assertTrue(work.acceptsSamples(work.generation, motion = false))
     }
 
 }
