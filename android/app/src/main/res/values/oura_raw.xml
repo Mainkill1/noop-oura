@@ -16,8 +16,8 @@
     <string name="oura_raw_verified">Verified layout</string>
     <string name="oura_raw_research">Research / raw only</string>
     <string name="oura_raw_excluded">Unsupported in raw capture: lifecycle, debug and control payloads are excluded.</string>
-    <string name="oura_raw_awaiting_record">Never received this session · awaiting normal history sync. This event may be unsupported by this ring.</string>
-    <string name="oura_raw_never_received">Never received this session · awaiting a response or push. An unsupported channel may remain empty.</string>
+    <string name="oura_raw_awaiting_record">No record retained for this channel · awaiting normal history sync. This event may be unsupported by this ring.</string>
+    <string name="oura_raw_never_received">No response or push retained for this channel · awaiting delivery. An unsupported channel may remain empty.</string>
     <string name="oura_raw_quality_info">All IBI pairs are retained, including zero and invalid intervals. Quality is the ring’s two-bit flag (good beat = 1), not a health score.</string>
     <string name="oura_raw_night_info">All six decoded IBI and optical amplitude entries remain visible, including zeros.</string>
     <string name="oura_raw_r_info">R-ratio and perfusion are research quantities, not calibrated oxygen percentages. Header width is unresolved; only bytes are decoded.</string>

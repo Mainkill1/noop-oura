@@ -61,7 +61,7 @@ class OuraRawDeviceTest {
         capture("raw-research-bytes-synthetic")
         compose.onNodeWithTag("oura-raw-channel").performScrollTo().performClick()
         compose.onNodeWithTag("oura-raw-channel-event:81").performScrollTo().performClick()
-        compose.onNodeWithTag("oura-raw-empty").performScrollTo().assertTextContains("awaiting normal history sync", substring = true)
+        compose.onNodeWithTag("oura-raw-empty").performScrollTo().assertTextEquals("No record retained for this channel · awaiting normal history sync. This event may be unsupported by this ring.")
         compose.onNodeWithText("SpO2%", substring = true).assertDoesNotExist()
         capture("raw-ppg-empty-synthetic")
     }

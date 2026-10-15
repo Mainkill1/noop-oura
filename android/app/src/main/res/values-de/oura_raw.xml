@@ -16,8 +16,8 @@
     <string name="oura_raw_verified">Verifiziertes Format</string>
     <string name="oura_raw_research">Forschung / nur Rohdaten</string>
     <string name="oura_raw_excluded">In Rohdaten nicht unterstützt: Lebenszyklus-, Debug- und Steuerdaten sind ausgeschlossen.</string>
-    <string name="oura_raw_awaiting_record">Diese Sitzung noch nicht empfangen · wartet auf normale Verlaufssynchronisierung. Dieser Ring unterstützt das Ereignis möglicherweise nicht.</string>
-    <string name="oura_raw_never_received">Diese Sitzung noch nicht empfangen · wartet auf Antwort oder Push. Nicht unterstützte Kanäle können leer bleiben.</string>
+    <string name="oura_raw_awaiting_record">Kein Datensatz für diesen Kanal im aktuellen Datenfenster · wartet auf normale Verlaufssynchronisierung. Dieser Ring unterstützt das Ereignis möglicherweise nicht.</string>
+    <string name="oura_raw_never_received">Keine Antwort oder Push-Daten für diesen Kanal im aktuellen Datenfenster · wartet auf neue Daten. Nicht unterstützte Kanäle können leer bleiben.</string>
     <string name="oura_raw_quality_info">Alle IBI-Paare bleiben erhalten, auch Nullwerte und ungültige Intervalle. Qualität ist das Zwei-Bit-Flag des Rings (guter Schlag = 1), kein Gesundheitswert.</string>
     <string name="oura_raw_night_info">Alle sechs IBI- und optischen Amplitudeneinträge bleiben sichtbar, einschließlich Nullwerten.</string>
     <string name="oura_raw_r_info">R-Verhältnis und Perfusion sind Forschungsgrößen, keine kalibrierten Sauerstoffprozente. Die Headerbreite ist ungeklärt; nur Bytes werden dekodiert.</string>

@@ -16,8 +16,8 @@
     <string name="oura_raw_verified">Format vérifié</string>
     <string name="oura_raw_research">Recherche / brut uniquement</string>
     <string name="oura_raw_excluded">Capture brute non prise en charge : données de cycle de vie, débogage et contrôle exclues.</string>
-    <string name="oura_raw_awaiting_record">Jamais reçu dans cette session · en attente de la synchronisation normale. Cet anneau peut ne pas le prendre en charge.</string>
-    <string name="oura_raw_never_received">Jamais reçu dans cette session · en attente de réponse ou flux. Un canal non pris en charge peut rester vide.</string>
+    <string name="oura_raw_awaiting_record">Aucun enregistrement conservé pour ce canal · en attente de la synchronisation normale. Cet anneau peut ne pas le prendre en charge.</string>
+    <string name="oura_raw_never_received">Aucune réponse ni donnée en direct conservée pour ce canal · en attente de réception. Un canal non pris en charge peut rester vide.</string>
     <string name="oura_raw_quality_info">Toutes les paires IBI sont conservées, y compris zéros et intervalles invalides. La qualité est un indicateur sur deux bits (bon battement = 1), pas un score de santé.</string>
     <string name="oura_raw_night_info">Les six entrées IBI et amplitudes optiques restent visibles, y compris les zéros.</string>
     <string name="oura_raw_r_info">Le rapport R et la perfusion sont des données de recherche, pas des pourcentages d’oxygène calibrés. Largeur d’en-tête inconnue ; seuls les octets sont décodés.</string>

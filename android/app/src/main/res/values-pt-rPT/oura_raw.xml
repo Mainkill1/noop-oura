@@ -16,8 +16,8 @@
     <string name="oura_raw_verified">Formato verificado</string>
     <string name="oura_raw_research">Investigação / só dados brutos</string>
     <string name="oura_raw_excluded">Captura não suportada: dados de ciclo, depuração e controlo excluídos.</string>
-    <string name="oura_raw_awaiting_record">Ainda não recebido nesta sessão · à espera da sincronização normal. O anel pode não suportar este evento.</string>
-    <string name="oura_raw_never_received">Ainda não recebido nesta sessão · à espera de resposta ou fluxo. Um canal não suportado pode ficar vazio.</string>
+    <string name="oura_raw_awaiting_record">Nenhum registo preservado para este canal · à espera da sincronização normal. O anel pode não suportar este evento.</string>
+    <string name="oura_raw_never_received">Sem respostas ou dados do fluxo preservados para este canal · à espera de dados. Um canal não suportado pode ficar vazio.</string>
     <string name="oura_raw_quality_info">Todos os pares IBI são preservados, incluindo zeros e intervalos inválidos. A qualidade é um indicador de dois bits (batimento bom = 1), sem pontuação de saúde.</string>
     <string name="oura_raw_night_info">As seis entradas IBI e amplitudes óticas ficam visíveis, incluindo zeros.</string>
     <string name="oura_raw_r_info">Rácio R e perfusão são dados de investigação, sem percentagem de oxigénio calibrada. Cabeçalho por esclarecer; só se descodificam bytes.</string>
