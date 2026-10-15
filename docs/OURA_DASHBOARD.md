@@ -133,7 +133,8 @@ was used. This local result does not imply that the fork's older remote baseline
 Actions roster passed. Apple app targets and StrandTests were not run in this Linux environment.
 
 Version 12.3.0-debug (562) was installed on the OnePlus 15. A phone-only encrypted-preferences comparison
-immediately after installation confirmed unchanged credentials. Final device UI and continuous-stream
+immediately after installation confirmed unchanged credentials, and the updated app authenticated
+successfully with the existing ring key. Final device UI and continuous-stream
 acceptance remain pending; the first instrumentation attempt was interrupted because the phone was
 dozing with its lock/notification shade above the test activity. This is not a passing device test run.
 
