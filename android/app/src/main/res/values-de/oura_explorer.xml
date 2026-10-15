@@ -55,4 +55,8 @@
     <item quantity="other">Noch %1$d Sekunden</item>
   </plurals>
   <string name="oura_live_starting">Live wird gestartet…</string>
+  <plurals name="oura_live_cursor_seconds">
+    <item quantity="one">Cursor: vor %1$d Sekunde</item>
+    <item quantity="other">Cursor: vor %1$d Sekunden</item>
+  </plurals>
 </resources>

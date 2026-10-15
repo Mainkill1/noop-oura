@@ -55,4 +55,8 @@
     <item quantity="other">Il reste %1$d secondes</item>
   </plurals>
   <string name="oura_live_starting">Démarrage du direct…</string>
+  <plurals name="oura_live_cursor_seconds">
+    <item quantity="one">Curseur : il y a %1$d seconde</item>
+    <item quantity="other">Curseur : il y a %1$d secondes</item>
+  </plurals>
 </resources>

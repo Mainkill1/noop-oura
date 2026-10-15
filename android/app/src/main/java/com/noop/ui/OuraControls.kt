@@ -14,6 +14,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
@@ -38,7 +39,7 @@ internal fun OuraControls(
         Column(verticalArrangement = Arrangement.spacedBy(Metrics.space12)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.weight(1f)) {
-                    TextButton(onClick = { sourceMenu = true }, enabled = sources.isNotEmpty()) {
+                    TextButton(onClick = { sourceMenu = true }, enabled = sources.isNotEmpty(), modifier = Modifier.testTag("oura-source-picker")) {
                         Text(sources.firstOrNull { it.id == sourceId }?.name ?: stringResource(R.string.oura_source),
                             modifier = Modifier.weight(1f, fill = false), maxLines = 2, overflow = TextOverflow.Ellipsis,
                             color = Palette.textPrimary)

@@ -45,7 +45,7 @@ class OuraLiveDeviceTest {
         compose.runOnIdle { assertEquals(1, starts); assertEquals(0, selections) }
         compose.onNodeWithText("Stop live").performScrollTo().performClick()
         compose.runOnIdle { assertEquals(1, stops) }
-        compose.onNodeWithText("Live stopped", substring = true).assertExists()
+        compose.onNodeWithTag("oura-live-session").assertTextEquals("Live stopped")
         compose.onNodeWithTag("oura-live-plot").performScrollTo().assertIsDisplayed()
         capture("live-stopped-motion")
     }
@@ -60,6 +60,32 @@ class OuraLiveDeviceTest {
         compose.onNodeWithText("Heart rate: 81.0 bpm").assertExists()
         compose.onNodeWithText("X axis: 3000.0 raw counts / -1200.0 raw counts").assertExists()
         capture("live-compare-synthetic")
+    }
+
+    @Test fun gapCursorAndUnequalReceiptTimesNeverInventAnUpdate() {
+        val snapshot = OuraLiveSessionSnapshot(active = true, sourceDeviceId = "synthetic", generation = 121212,
+            selection = OuraLiveSelection(true, true), startedAtElapsedMs = 30000,
+            hr = OuraLiveStream(listOf(OuraLiveHrSample(50000, 64, null), OuraLiveHrSample(59000, 81, null)),
+                OuraLiveStreamPhase.RECEIVING, 59000),
+            motion = OuraLiveStream(listOf(OuraLiveMotionSample(57600, 1, 0, 123, -456, 789, 0)),
+                OuraLiveStreamPhase.STALE, 57600))
+        compose.setContent { Frame {
+            OuraLivePanel(snapshot, 60000, OuraCategory.Compare, setOf("hr", "x"), true, true,
+                OuraHistorySyncPhase.PAUSED_FOR_LIVE, {}, {}, {}, {})
+        } }
+        val plot = compose.onNodeWithTag("oura-live-plot").performScrollTo()
+        plot.performTouchInput { click(percentOffset(25f / 30f, .5f)) }
+        compose.onNodeWithText("Heart rate: —").assertExists()
+        compose.onNodeWithText("X axis: —").assertExists()
+        compose.onNodeWithText("Updated 5 seconds ago").assertDoesNotExist()
+        compose.onNodeWithText("Cursor: 5 seconds ago").assertExists()
+        plot.performTouchInput { click(percentOffset(28f / 30f, .5f)) }
+        compose.onNodeWithText("Heart rate: 81.0 bpm").assertExists()
+        compose.onNodeWithText("X axis: 123.0 raw counts").assertExists()
+        compose.onNodeWithText("Cursor: 2 seconds ago").assertExists()
+        compose.onNodeWithText("Updated 1 second ago").assertExists()
+        compose.onNodeWithText("Updated 2 seconds ago").assertExists()
+        capture("live-gap-cursor-synthetic")
     }
 
     @Test fun perStreamFreshnessAndEmptyWaitingRemainDistinct() {
@@ -86,7 +112,10 @@ class OuraLiveDeviceTest {
         }
         compose.onNodeWithText("Stop live").performScrollTo().assertIsDisplayed()
         compose.onNodeWithTag("oura-live-trace-z").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("60 s").performScrollTo().performClick().assertIsSelected()
+        // A large-font pill scrolls horizontally; first bring its ROW through the vertical viewport.
+        compose.onNodeWithTag("oura-live-window").performScrollTo().assertIsDisplayed()
+        capture("live-large-font-controls-synthetic")
+        compose.onNodeWithText("60 s").performScrollTo().assertIsDisplayed().performClick().assertIsSelected()
         compose.onNodeWithTag("oura-live-plot").performScrollTo().assertIsDisplayed()
         capture("live-large-font-synthetic")
     }

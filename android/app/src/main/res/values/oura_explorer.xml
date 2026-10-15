@@ -55,4 +55,8 @@
     <item quantity="other">%1$d seconds remaining</item>
   </plurals>
   <string name="oura_live_starting">Starting live…</string>
+  <plurals name="oura_live_cursor_seconds">
+    <item quantity="one">Cursor: %1$d second ago</item>
+    <item quantity="other">Cursor: %1$d seconds ago</item>
+  </plurals>
 </resources>

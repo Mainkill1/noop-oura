@@ -122,7 +122,7 @@ internal fun OuraLivePanel(snapshot: OuraLiveSessionSnapshot, nowElapsedMs: Long
                 val context = androidx.compose.ui.platform.LocalContext.current
                 SegmentedPillControl(items = listOf(10, 30, 60), selection = windowSeconds,
                     label = { context.getString(R.string.oura_live_window_seconds, it) }, onSelect = { windowSeconds = it },
-                    modifier = Modifier.fillMaxWidth(), adaptsToAvailableWidth = true,
+                    modifier = Modifier.fillMaxWidth().testTag("oura-live-window"), adaptsToAvailableWidth = true,
                     accessibilityLabel = stringResource(R.string.oura_window))
                 traces.groupBy { it.unit }.values.forEach { group ->
                     Text(group.joinToString(" / ") { it.label } + ": " + formatLive(group.first().minimum) + " … " +
@@ -232,7 +232,7 @@ private fun OuraLivePlot(traces: List<OuraLiveTrace>, end: Long, seconds: Int, n
     }
     if (cursor != null) {
         val age = ouraLiveAgeSeconds(cursor, now) ?: 0
-        Text(pluralStringResource(R.plurals.oura_live_received_seconds, age.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(), age),
+        Text(pluralStringResource(R.plurals.oura_live_cursor_seconds, age.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(), age),
             style = NoopType.captionNumber, color = Palette.textSecondary)
         inspection.forEach { Text(it, style = NoopType.captionNumber, color = Palette.textPrimary) }
     }

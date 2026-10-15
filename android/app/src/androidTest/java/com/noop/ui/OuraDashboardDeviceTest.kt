@@ -59,9 +59,7 @@ class OuraDashboardDeviceTest {
         try {
             compose.setContent { TestTheme { AppRoot(vm) } }
             compose.onNodeWithText("Oura").assertIsDisplayed().performClick()
-            compose.waitUntil(10_000) {
-                compose.onAllNodesWithText("Oura export").fetchSemanticsNodes().isNotEmpty()
-            }
+            selectExportSource()
             compose.onNodeWithText("Oura export").assertIsDisplayed()
             compose.onNodeWithText("Today").assertIsDisplayed()
             compose.onNodeWithText("More").assertIsDisplayed()
@@ -215,9 +213,7 @@ class OuraDashboardDeviceTest {
         val restoration = StateRestorationTester(compose)
         try {
             restoration.setContent { TestTheme { OuraScreen(vm, {}, {}, {}) } }
-            compose.waitUntil(10_000) {
-                compose.onAllNodesWithText("Oura export").fetchSemanticsNodes().isNotEmpty()
-            }
+            selectExportSource()
             compose.onNodeWithText("30 days").performScrollTo().performClick()
             compose.onNodeWithText("Show ranges").performScrollTo().performClick()
             restoration.emulateSavedInstanceStateRestore()
@@ -232,17 +228,24 @@ class OuraDashboardDeviceTest {
             captureEvidence("dashboard-empty")
             compose.onNodeWithText("Movement").performScrollTo().performClick()
             compose.onNodeWithText("Live").performScrollTo().performClick()
-            restoration.emulateSavedInstanceStateRestore()
-            compose.onNodeWithText("Live").performScrollTo().assertIsSelected()
-            compose.onNodeWithText("Movement").assertIsSelected()
+            compose.onNodeWithText("Live").assertIsSelected()
             compose.onNodeWithText("30 days").assertDoesNotExist()
-            compose.waitUntil(10_000) {
-                compose.onAllNodesWithText("Oura export").fetchSemanticsNodes().isNotEmpty()
-            }
-            compose.onAllNodesWithText("History").onFirst().performClick()
+            restoration.emulateSavedInstanceStateRestore()
+            compose.onAllNodesWithText("History").onFirst().performScrollTo().assertIsSelected()
+            compose.onNodeWithText("Movement").assertIsSelected()
             compose.onNodeWithText("30 days").performScrollTo().assertIsSelected()
             compose.onNodeWithText("Show ranges").performScrollTo().assertIsOn()
         } finally { compose.runOnIdle { store.clear() } }
+    }
+
+    private fun selectExportSource() {
+        // An installed app may already have a paired ring. Choose the import explicitly in the UI.
+        compose.waitUntil(10_000) {
+            compose.onAllNodes(hasTestTag("oura-source-picker") and isEnabled()).fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithTag("oura-source-picker").performScrollTo().assertIsDisplayed().performClick()
+        compose.onNodeWithText("Oura export").performClick()
+        compose.onNodeWithTag("oura-source-picker").assertTextContains("Oura export")
     }
 
     @androidx.compose.runtime.Composable
