@@ -482,6 +482,56 @@ class OuraLiveSource(
      * of ours to resolve.
      */
     private var lastWriteAccepted: Boolean? = null
+    @Volatile private var writeSession: WriteSession? = null
+    private val retiringWrites = ConcurrentHashMap<BluetoothGatt, WriteSession>()
+
+    /** Queue, timer, and callback ownership belong to one immutable GATT session. */
+    private inner class WriteSession(val link: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
+        private var timeout: Runnable? = null
+        private val teardownDeadline = Runnable { finishTeardown() }
+        val queue: OuraWriteQueue = OuraWriteQueue(
+            submit = { command -> submitWrite(link, characteristic, command) },
+            onStarted = { command ->
+                val task = Runnable { queueTimeout(command) }
+                timeout = task
+                handler.postDelayed(task, WRITE_CALLBACK_TIMEOUT_MS)
+            },
+            onFinished = { cancelTimeout() },
+            onFailure = { command, reason ->
+                log("Oura: write ${command.label} failed ($reason) - closing this session without replay")
+                handler.post {
+                    guardedCallback("write-failure") {
+                        if (retiringWrites[link] === this) finishTeardown()
+                        else if (writeSession === this && gatt === link) {
+                            if (command.label == "DANGEROUS_install_key") announceNeedsPairing(KEY_INSTALL_MESSAGE)
+                            runCatching { link.disconnect() }
+                        }
+                    }
+                }
+            },
+        )
+
+        private fun queueTimeout(command: OuraCommand): Unit = queue.timeout(command)
+        private fun cancelTimeout() {
+            timeout?.let(handler::removeCallbacks)
+            timeout = null
+        }
+        fun close() {
+            queue.close()
+            cancelTimeout()
+            handler.removeCallbacks(teardownDeadline)
+        }
+        fun retire(commands: List<OuraCommand>) {
+            handler.postDelayed(teardownDeadline, WRITE_TEARDOWN_TIMEOUT_MS)
+            queue.finishWith(commands) { finishTeardown() }
+        }
+        private fun finishTeardown() {
+            if (!retiringWrites.remove(link, this)) return
+            close()
+            runCatching { link.disconnect() }
+            runCatching { link.close() }
+        }
+    }
     /** The nonce timer. One-shot; re-posted by [authWatchdogRunnable] after an escalation. */
     private val authWatchdogRunnable = Runnable { authWatchdogFired() }
 
@@ -1165,7 +1215,7 @@ class OuraLiveSource(
     // MARK: - Connecting
 
     /** Connect to the chosen discovered ring (by address) and start the auth → enable → stream flow. */
-    override fun connect(address: String) {
+    override fun connect(address: String) = onGattThread("connect") {
         stopScan()
         _needsPairing.value = null
         // Remember the paired ring so an involuntary drop auto-reconnects to it (#912). An explicit connect
@@ -1174,7 +1224,7 @@ class OuraLiveSource(
         intentionalDisconnect = false
         _linkPhase.value = LinkPhase.CONNECTING   // every branch below is an attempt to reach the ring
         val device = seen[address] ?: runCatching { adapter?.getRemoteDevice(address) }.getOrNull()
-        if (device == null) { pendingConnectAddress = address; return }
+        if (device == null) { pendingConnectAddress = address; return@onGattThread }
         connectToDevice(device)
     }
 
@@ -1189,7 +1239,7 @@ class OuraLiveSource(
      * is the documented way out of that dead end — and never scans past a known ring. Kotlin twin of the
      * Swift `reconnect()`.
      */
-    fun reconnect() {
+    fun reconnect() = onGattThread("reconnect") {
         _needsPairing.value = null
         intentionalDisconnect = false
         failedReconnectAttempts = 0
@@ -1219,7 +1269,10 @@ class OuraLiveSource(
         log("Oura: connecting to ${device.address}")
         _linkPhase.value = LinkPhase.CONNECTING
         // Tear down any prior link first so we never run two GATTs for this source.
-        gatt?.let { runCatching { it.disconnect(); it.close() } }
+        val previousGatt = gatt
+        gatt = null
+        closeWriteQueue()
+        previousGatt?.let { runCatching { it.disconnect(); it.close() } }
         // A fresh driver per connection: the app key is session-scoped (the proof handshake re-runs on
         // every connection), and a key provisioned since the last attempt is picked up here. allowKeyInstall
         // is wired straight from the connection's adoptIntent so the dangerous 0x24 write is reachable ONLY
@@ -1305,7 +1358,7 @@ class OuraLiveSource(
     }
 
     /** Tear down: cancel the connection and stop scanning, persisting anything still buffered. Idempotent. */
-    override fun stop() {
+    override fun stop() = onGattThread("stop") {
         // A deliberate teardown (device switch / removal) must NOT auto-reconnect: mark it intentional and
         // drop the reconnect target so any pending backoff bails and no fresh one is scheduled (#912). Remove
         // any already-posted reconnect from the main-looper handler too, so it isn't retained for the full
@@ -1340,14 +1393,22 @@ class OuraLiveSource(
         // mode, blocking its own sleep suite. Send the same disable + unsubscribe pair before the link
         // goes, and BEFORE driver.stop() so the phase check below still sees Streaming.
         //
-        // Best-effort by nature: WRITE_TYPE_NO_RESPONSE goes to the controller immediately, but the
-        // disconnect follows in the next statement and nothing guarantees a flush. It closes the common
-        // cases -- user disconnect, source switch, Bluetooth off -- and a process kill cannot be covered
-        // at all, which is a transport limit rather than a gap in this fix.
-        disableLiveHR()
+        // Allow the existing shutdown pair to complete locally before disconnecting, bounded at 1.5 s.
+        // A process kill or unavailable radio still cannot guarantee delivery to the ring.
+        val shutdown = if (driver?.phase == OuraDriverPhase.Streaming)
+            listOf(OuraCommands.liveHRDisable(), OuraCommands.liveHRUnsubscribe()) else emptyList()
         driver?.stop()
-        gatt?.let { runCatching { it.disconnect(); it.close() } }
+        val previousGatt = gatt
+        val previousWrites = writeSession
         gatt = null
+        writeSession = null
+        if (previousGatt != null && previousWrites?.link === previousGatt && shutdown.isNotEmpty()) {
+            retiringWrites[previousGatt] = previousWrites
+            previousWrites.retire(shutdown)
+        } else {
+            previousWrites?.close()
+            previousGatt?.let { runCatching { it.disconnect(); it.close() } }
+        }
         writeChar = null
         notifyChar = null
         reassembler.reset()
@@ -1471,7 +1532,14 @@ class OuraLiveSource(
     // MARK: - GATT callback
 
     private val gattCallback = object : BluetoothGattCallback() {
-        override fun onConnectionStateChange(g: BluetoothGatt, status: Int, newState: Int) = guardedCallback("connection-state") {
+        override fun onConnectionStateChange(g: BluetoothGatt, status: Int, newState: Int) = onGattThread("connection-state") {
+            if (g !== gatt) {
+                if (newState == BluetoothProfile.STATE_DISCONNECTED) {
+                    retiringWrites.remove(g)?.close()
+                    runCatching { g.close() }
+                }
+                return@onGattThread
+            }
             when (newState) {
                 BluetoothProfile.STATE_CONNECTED -> {
                     if (status != BluetoothGatt.GATT_SUCCESS) {
@@ -1484,6 +1552,7 @@ class OuraLiveSource(
                     g.discoverServices()
                 }
                 BluetoothProfile.STATE_DISCONNECTED -> {
+                    closeWriteQueue()
                     log("Oura: disconnected (status=$status)")
                     _linkPhase.value = LinkPhase.DISCONNECTED
                     loggedFirstHr = false   // a reconnect should log its first sample again
@@ -1527,7 +1596,7 @@ class OuraLiveSource(
                         retried133 = true
                         log("Oura: connect error 133 - retrying once in 1s")
                         handler.postDelayed(retry133Runnable, 1000)
-                        return@guardedCallback   // the one-shot 133 retry owns the reconnect for this drop
+                        return@onGattThread   // the one-shot 133 retry owns the reconnect for this drop
                     }
                     if (status == GATT_ERROR_133 && retried133) {
                         log("Oura: still failing (133) - try forgetting the ring in Android " +
@@ -1545,11 +1614,12 @@ class OuraLiveSource(
             }
         }
 
-        override fun onServicesDiscovered(g: BluetoothGatt, status: Int) = guardedCallback("services-discovered") {
+        override fun onServicesDiscovered(g: BluetoothGatt, status: Int) = onGattThread("services-discovered") {
+            if (g !== gatt) return@onGattThread
             log("Oura: services discovered (status=$status)")
             if (status != BluetoothGatt.GATT_SUCCESS) {
                 log("Oura: WARNING service discovery failed (status=$status) - giving up on this ring")
-                return@guardedCallback
+                return@onGattThread
             }
             // Request the gen-appropriate MTU (gen3=203, gen4/5=247) so multi-record notifications and
             // the auth proof fit. The flow continues from onMtuChanged (or falls through if it fails).
@@ -1562,7 +1632,8 @@ class OuraLiveSource(
             }
         }
 
-        override fun onMtuChanged(g: BluetoothGatt, mtu: Int, status: Int) = guardedCallback("mtu-changed") {
+        override fun onMtuChanged(g: BluetoothGatt, mtu: Int, status: Int) = onGattThread("mtu-changed") {
+            if (g !== gatt) return@onGattThread
             log("Oura: MTU negotiated = $mtu (status=$status)")
             setUpNotifications(g)
         }
@@ -1571,8 +1642,9 @@ class OuraLiveSource(
             g: BluetoothGatt,
             descriptor: BluetoothGattDescriptor,
             status: Int,
-        ) = guardedCallback("descriptor-write") {
-            if (descriptor.uuid != CCCD) return@guardedCallback
+        ) = onGattThread("descriptor-write") {
+            if (g !== gatt) return@onGattThread
+            if (descriptor.uuid != CCCD) return@onGattThread
             // The auth watchdog's off/on toggle (#2304) lands here twice — the disable, then the
             // re-enable — and must NOT replay Ready: the driver is still Authenticating, so the only thing
             // to do on the re-enable is ask for the nonce again on the freshly re-established
@@ -1584,7 +1656,7 @@ class OuraLiveSource(
                     // the session to the drop step, which is the honest outcome for a toggle that failed.
                     log("Oura: WARNING auth toggle CCCD write status=$status - leaving the nonce clock to the drop step")
                     authToggleCccdPending = 0
-                    return@guardedCallback
+                    return@onGattThread
                 }
                 if (authToggleCccdPending == 1) {
                     log("Oura: notifications disabled for the auth toggle - re-enabling in ${AUTH_TOGGLE_GAP_MS / 1000.0}s")
@@ -1592,7 +1664,7 @@ class OuraLiveSource(
                     log("Oura: notifications re-enabled (CCCD write status=$status) after the auth toggle - re-sending get_nonce")
                     resendAuthNonce()
                 }
-                return@guardedCallback
+                return@onGattThread
             }
             if (status == BluetoothGatt.GATT_SUCCESS) {
                 log("Oura: notifications enabled (CCCD write status=$status) - beginning auth")
@@ -1605,19 +1677,33 @@ class OuraLiveSource(
             }
         }
 
+        override fun onCharacteristicWrite(g: BluetoothGatt, ch: BluetoothGattCharacteristic, status: Int) =
+            onGattThread("characteristic-write") {
+                val current = writeSession
+                val owner = current?.takeIf { it.link === g } ?: retiringWrites[g]
+                if (owner == null || ch.uuid != WRITE_UUID) return@onGattThread
+                if (status != BluetoothGatt.GATT_SUCCESS) log("Oura: characteristic write failed (GATT status=$status)")
+                owner.queue.complete(status == BluetoothGatt.GATT_SUCCESS)
+            }
+
         override fun onCharacteristicChanged(
             g: BluetoothGatt,
             ch: BluetoothGattCharacteristic,
             value: ByteArray,
         ) {
-            if (ch.uuid == NOTIFY_UUID) handleNotification(value)
+            onGattThread("characteristic-changed") {
+                if (g === gatt && ch.uuid == NOTIFY_UUID) handleNotification(value)
+            }
         }
 
         // Legacy (< API 33) characteristic-changed callback: read the value off the characteristic.
         @Deprecated("Deprecated in Java")
         @Suppress("DEPRECATION")
         override fun onCharacteristicChanged(g: BluetoothGatt, ch: BluetoothGattCharacteristic) {
-            if (ch.uuid == NOTIFY_UUID) handleNotification(ch.value ?: return)
+            val value = ch.value?.copyOf() ?: return
+            onGattThread("characteristic-changed") {
+                if (g === gatt && ch.uuid == NOTIFY_UUID) handleNotification(value)
+            }
         }
     }
 
@@ -1638,6 +1724,9 @@ class OuraLiveSource(
             announceNeedsPairing(KEY_INSTALL_MESSAGE)
             return@guardedCallback
         }
+        val writeCharacteristic = requireNotNull(writeChar)
+        closeWriteQueue()
+        writeSession = WriteSession(g, writeCharacteristic)
         log("Oura: write + notify characteristics found - enabling notifications on the notify char")
         g.setCharacteristicNotification(notify, true)
         val cccd = notify.getDescriptor(CCCD)
@@ -1790,40 +1879,35 @@ class OuraLiveSource(
         }
     }
 
-    /**
-     * Hand the ring back out of daytime-HR mode: the feature-mode write plus the unsubscribe the enable
-     * triplet leaves standing. Twin of Swift `OuraLiveSource.disableLiveHR`.
-     *
-     * `liveHRDisable` alone only touches the MODE byte, so without the unsubscribe the notification
-     * channel stays open for the ring's own adaptive sampling to push through -- which is why #1526
-     * corrected the byte (0x01 "automatic" was never "off") and added the pair. The Streaming guard
-     * covers the callers: there is nothing to disable if the session never got that far.
-     */
-    private fun disableLiveHR() {
-        val d = driver ?: return
-        if (d.phase != OuraDriverPhase.Streaming) return
-        write(OuraCommands.liveHRDisable())
-        write(OuraCommands.liveHRUnsubscribe())
-    }
-
     /** Write one built command to the ring's write characteristic (Write Without Response). Logged by its
      *  short label only (never bytes or an address). */
     private fun write(cmd: OuraCommand) = guardedCallback("write") {
-        val g = gatt ?: return@guardedCallback
-        val ch = writeChar ?: return@guardedCallback
+        writeSession?.queue?.enqueue(cmd)
+    }
+
+    private fun closeWriteQueue() {
+        val owner = writeSession
+        writeSession = null
+        owner?.close()
+    }
+
+    /** Android write completion is separate from the ring's protocol response. Never log bytes. */
+    private fun submitWrite(g: BluetoothGatt, ch: BluetoothGattCharacteristic, cmd: OuraCommand): Boolean {
         val bytes = ByteArray(cmd.bytes.size) { cmd.bytes[it].toByte() }
-        log("Oura: → ${cmd.label}")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             val rc = g.writeCharacteristic(ch, bytes, BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE)
             lastWriteAccepted = rc == android.bluetooth.BluetoothStatusCodes.SUCCESS
+            log("Oura: → ${cmd.label} (Android status=$rc)")
         } else {
             @Suppress("DEPRECATION")
             run {
                 ch.writeType = BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
                 ch.value = bytes
                 lastWriteAccepted = g.writeCharacteristic(ch)
+                log("Oura: → ${cmd.label} (Android accepted=$lastWriteAccepted)")
             }
         }
+        return lastWriteAccepted == true
     }
 
     /**
@@ -2497,12 +2581,20 @@ class OuraLiveSource(
         // later disconnect must NOT auto-reconnect (that would loop the same auth failure and drain the
         // ring). Suppress it the same way a deliberate teardown does (#912); a user reconnect re-arms it.
         intentionalDisconnect = true
+        closeWriteQueue()
         reconnectAddress = null
         failedReconnectAttempts = 0
         if (_needsPairing.value != null) return
         _needsPairing.value = message
         log("Oura: $message")
     }
+
+    /** Connection lifecycle and GATT callbacks share one executor; guards run after dispatch. */
+    private fun onGattThread(label: String, block: () -> Unit) {
+        if (Looper.myLooper() === handler.looper) guardedCallback(label, block)
+        else handler.post { guardedCallback(label, block) }
+    }
+
 
     /**
      * Run a GATT-callback body so a throw on the binder thread (or a posted main-thread block) can never
@@ -2519,6 +2611,8 @@ class OuraLiveSource(
     }
 
     companion object {
+        private const val WRITE_CALLBACK_TIMEOUT_MS = 5000L
+        private const val WRITE_TEARDOWN_TIMEOUT_MS = 1500L
         /** The ring's base service + write/notify characteristics (OURA_PROTOCOL.md s1.1). Built from the
          *  protocol package's UUID strings so the facts live in exactly one place. */
         val SERVICE_UUID: UUID = UUID.fromString(OuraGatt.serviceUUID)

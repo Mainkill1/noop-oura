@@ -107,6 +107,30 @@ ring collection, calibration, or spoken TalkBack. The standalone rooted exporter
 verified on a OnePlus 15; see
 [the key-transfer verification](OURA_KEY_TRANSFER.md#verification).
 
+### Android Bluetooth delivery fix (12.1.1)
+
+Android accepts only one outstanding characteristic write per GATT connection. Previously, startup
+and post-authentication commands were submitted in bursts without waiting for write completion.
+Heart rate could stream while history and status requests were rejected locally, leaving the other
+Live categories empty. The Android transport now queues the existing commands in order and advances
+from `onCharacteristicWrite`. A rejection, failed completion, or five-second timeout closes the session
+without replaying an uncertain command. Stop retains only the accepted write and the existing HR
+shutdown pair, with a bounded teardown deadline. Callbacks and lifecycle changes run on the main looper;
+stale connections cannot complete a new connection's queue. No protocol payloads, decoders, stored
+values, or Swift transport behavior change.
+
+The Full JVM suite passes with 6,716 tests, zero failures/errors, and six existing skips. Ten queue
+regressions cover startup bursts, notification/write ordering, rejection, failed completion, timeout
+without key-command replay, stale timers, close, and teardown. Full debug APK assembly passes.
+On a OnePlus 15 running Android 16, build 12.1.1-debug (557) authenticates with the preserved imported
+key, receives fresh heart-rate readings, and drains stored history through successive cursors. The
+previously empty RR-interval, temperature, and movement tables receive real ring records. The Oura
+Live Health view shows a fresh stream with a current observation time, and History → Movement
+shows populated duration, X/Y/Z, and intensity summaries over a seven-day window. This verifies delivery and
+collection on that device; it does not establish live streaming for every sensor, oxygen calibration,
+or availability of sensor features the ring reports inactive. Older recovered records appear in
+History, not in the Live view's last-15-minute window.
+
 ### Reproducing checks
 
 From `android/`, with the SDK and JDK configured:
