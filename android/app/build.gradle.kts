@@ -7,8 +7,8 @@ plugins {
 }
 
 // Optional release signing. Credentials live in `keystore.properties` (git-ignored, never
-// committed); when it's absent — clones, CI without secrets — release falls back to the debug
-// key so `assembleRelease` always produces an installable APK. See docs/BUILD.md.
+// committed). Genuine releases require it; an explicit staging build may use the debug key
+// under the separate staging application id. See docs/BUILD.md.
 val keystorePropsFile = rootProject.file("keystore.properties")
 val keystoreProps = Properties().apply {
     if (keystorePropsFile.exists()) keystorePropsFile.inputStream().use { load(it) }
@@ -26,7 +26,7 @@ android {
         applicationId = "com.noop.whoop"
         minSdk = 26
         targetSdk = 34
-        versionCode = 564
+        versionCode = 565
         versionName = "12.4.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

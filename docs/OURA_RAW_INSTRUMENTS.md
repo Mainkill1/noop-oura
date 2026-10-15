@@ -109,16 +109,25 @@ localization and documentation checks pass. Independent task review and the scop
 re-review approve the implementation. The fix adds completion-based cadence tests for interval,
 channel and ownership changes; 130 focused Oura transport/UI regressions also pass.
 
-Version 12.4.0-debug (564) is installed on the OnePlus 15. A phone-only comparison confirms its
-encrypted key preferences match the private pre-update backup byte-for-byte. The updated app
-then authenticated successfully with the existing ring key. The original staging app remains
-force-stopped. No reset, takeover or credential replacement was used.
+The signed Full Release APK is version 12.4.0 (565), package `com.noop.whoop`, with a dedicated
+RSA-4096 release certificate. APK signature verification and release vital lint pass; the manifest
+is not debuggable. The certificate SHA-256 fingerprint is
+`ef5afed31777d112c97aaad0a633c354fe83151fa63b2d36e76ce6f2c71d1a9a`.
+Private signing materials are excluded from the repository and release assets.
 
-The 34 non-key synthetic Compose fixtures, including four new Raw cases, are compiled. Execution
-of the final fixture set and actual read-only polling/response cadence checks remain pending because
-the phone is connected but locked. The earlier 12.3.1 baseline ran 30 cases: 28 passed and two fixture
-issues were corrected in this version. Those earlier executions do not establish final Raw rendering
-or transport behavior. Continuous motion lease renewal also remains unverified on hardware.
+On the rooted OnePlus 15, the release APK is installed alongside the retained development package.
+A phone-only backup preserves the source APK, data and encrypted key preferences. Databases were
+compared byte-for-byte after copying, and all four stored ring keys were re-encrypted under the
+release app UID and verified in memory. The temporary plaintext transfer file was removed; real
+credentials and health data never left the phone. No reset, takeover or ring-key replacement was used.
+
+The first final synthetic device run executed 34 cases: 33 passed. The remaining Raw navigation
+clearance assertion measured visibility before reaching the scroll end. Its fixture now consumes
+the trailing padding, requires the true scroll end and retains the original unclipped physical
+clearance assertion. The instrumentation APK compiles. Its focused rerun and fresh release-app
+authentication await the phone being unlocked. Earlier development builds authenticated with the
+existing ring key; those results are not represented as release-app authentication. Continuous
+motion lease renewal and new raw polling/cadence checks remain unverified on hardware.
 
 Apple app targets are unavailable in this Linux environment; native Apple UI/transport parity is
 not claimed. The fork currently reports no active GitHub Actions workflow roster, so local results

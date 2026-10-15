@@ -27,8 +27,12 @@ rather than Android's application log stream. Screenshots of the exporter are bl
 
 ## Import into NOOP
 
-1. Install **NOOP-Oura.apk**. This prerelease uses the existing debug package/signature and updates
-   the development build used in this session. It installs alongside official and staging builds.
+1. Install **NOOP-Oura-12.4.0-release.apk** from the [signed Android release](https://github.com/Mainkill1/noop-oura/releases/tag/v12.4.0).
+   It uses package `com.noop.whoop` and a dedicated release signing certificate. Earlier session
+   prereleases used `com.noop.whoop.debug`; their keys do not transfer automatically between packages.
+   Keep the development app installed until its key export has been imported into the release app.
+   An existing `com.noop.whoop` signed by another certificate cannot accept this APK as an
+   in-place update; preserve that source installation and export its data and keys first.
 2. Tap **Oura**, open the toolbar's **More** (three dots), then **Transfer ring keys**.
 3. Choose **Import key XML**, select the exported file, review the ring identifiers, and tap
    **Import listed keys**. Existing credentials for those identifiers are replaced together.
@@ -40,6 +44,21 @@ a serial identifier and the new scan starts with a Bluetooth address. The key fi
 Import does not arm adoption intent. Credentials are stored encrypted in the new app's Keystore-backed
 preferences. The XML itself contains readable secrets: keep it private and delete spare copies after use.
 The normal NOOP app can also export its own stored keys through **Transfer ring keys** without root.
+
+## Development-to-release migration
+
+Android Keystore credentials belong to an app UID. Copying encrypted preferences from
+`com.noop.whoop.debug` to `com.noop.whoop` does not transfer the underlying master key. Use the
+export/import flow above before removing the source package. The release signing certificate
+fingerprint is supplied with the APK; future release updates must retain that identity.
+
+For the rooted OnePlus 15 installation on 2026-10-15, a private phone-only backup retained the
+source APK, databases, files and preferences. Ordinary data was copied with the source stopped.
+The existing root exporter decrypted the four stored ring keys as the source UID; a one-shot local
+helper imported them through the release app's own encrypted store as its new UID and verified
+all four keys in memory. The temporary plaintext XML was then deleted. No key material or health
+records were transferred to the build host or GitHub. The original app and its Keystore remain
+available for rollback.
 
 ## File compatibility
 
