@@ -38,6 +38,22 @@ class OuraExplicitSessionSourceTest {
     private fun settle() = shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(150))
     private fun drain(queue: OuraWriteQueue) { repeat(12) { queue.complete(true) } }
 
+    @Test fun oxygenStatusIsReadOnlyAndDoesNotOutliveConnection() {
+        ready()
+        val sent = mutableListOf<String>()
+        attachQueue(sent = sent)
+        notification(0x2f, 6, 0x21, 4, 0, 0, 0, 0)
+        assertEquals(0, source.oxygenFeatureStatus.value?.mode)
+        notification(0x2f, 6, 0x21, 4, 1, 0, 0, 0)
+        assertEquals(1, source.oxygenFeatureStatus.value?.mode)
+        notification(0x2f, 6, 0x21, 0x0b, 0, 0, 0, 0)
+        assertEquals(1, source.oxygenFeatureStatus.value?.mode)
+        assertFalse(source.liveSession.value.active)
+        assertTrue(sent.isEmpty())
+        source.stop()
+        assertNull(source.oxygenFeatureStatus.value)
+    }
+
     @Test fun removedMotionCannotStartWhenCompletionArrivesBeforeSettle() {
         ready()
         val sent = mutableListOf<String>()

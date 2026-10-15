@@ -77,4 +77,17 @@
     <string name="oura_host_sample_count">%1$d vetores</string>
     <string name="oura_host_axis_detail">%1$s: média %2$s · mín. %3$d · máx. %4$d</string>
     <string name="oura_host_receipt_bounds">Receções locais: %1$s – %2$s</string>
+  <string name="oura_legend">Legenda</string>
+  <string name="oura_legend_solid">Linha contínua</string>
+  <string name="oura_legend_dashed">Linha tracejada</string>
+  <string name="oura_legend_dotted">Linha pontilhada</string>
+  <string name="oura_legend_dash_dot">Linha de traço e ponto</string>
+  <string name="oura_legend_median">Mediana</string>
+  <string name="oura_legend_range">Intervalo mín.–máx.</string>
+  <string name="oura_oxygen_recorded_only">O₂ · apenas registado</string>
+  <string name="oura_oxygen_live_unavailable">Esta ligação não disponibiliza SpO₂ contínuo em direto. As medições de oxigénio são recolhidas durante o sono.</string>
+  <string name="oura_oxygen_sensing_off">O anel indica que a medição de oxigénio está desligada.</string>
+  <string name="oura_oxygen_sensing_on">O anel indica que a medição de oxigénio está ativada.</string>
+  <string name="oura_oxygen_sensing_unknown">O estado da medição de oxigénio está indisponível.</string>
+  <string name="oura_oxygen_view_history">Ver histórico de oxigénio</string>
 </resources>

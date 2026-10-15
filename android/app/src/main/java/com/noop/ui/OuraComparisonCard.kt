@@ -1,6 +1,5 @@
 package com.noop.ui
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
@@ -12,9 +11,6 @@ import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -22,7 +18,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.Density
 import com.noop.R
 import com.noop.analytics.OuraComparison
 import com.noop.analytics.SignalDecimation
@@ -78,27 +73,15 @@ internal fun OuraComparisonCard(keys: List<String>, signals: Map<String, SignalD
             }
             if (traces.isEmpty()) Text(stringResource(R.string.oura_compare_choose), style = NoopType.body, color = Palette.textSecondary)
             else {
-                // Every axis is named and bounded; temperature and HR can never share an unlabeled Y scale.
+                OuraChartLegend(traces.mapIndexed { index, ui ->
+                    OuraLegendEntry(ui.trace.id, ui.label, ui.trace.unit, ui.color, ouraComparisonTraceStyle(index))
+                })
+                // Bounds retain the corresponding signal names when quantities use separate scales.
                 axes.forEach { (id, axis) ->
                     val members = traces.filter { it.trace.axisId == id }
-                    val first = members.first()
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(Metrics.space8), verticalArrangement = Arrangement.spacedBy(Metrics.space4)) {
-                        members.forEach { member ->
-                            val index = traces.indexOf(member)
-                            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(Metrics.space4)) {
-                                Canvas(Modifier.width(Metrics.space24).height(Metrics.legendLineHeight)) {
-                                    val stroke = comparisonStroke(index)
-                                    drawLine(member.color, Offset(0f, size.height / 2), Offset(size.width, size.height / 2),
-                                        strokeWidth = stroke.width, pathEffect = stroke.pathEffect, cap = StrokeCap.Round)
-                                }
-                                Text(member.label, style = NoopType.caption, color = member.color)
-                            }
-                        }
-                    }
-                    Text(stringResource(R.string.oura_compare_bounds,
+                    Text(members.joinToString(" / ") { it.label } + ": " + stringResource(R.string.oura_compare_bounds,
                         String.format(Locale.getDefault(), "%.1f", axis.minimum),
-                        String.format(Locale.getDefault(), "%.1f", axis.maximum), first.trace.unit),
+                        String.format(Locale.getDefault(), "%.1f", axis.maximum), members.first().trace.unit),
                         style = NoopType.captionNumber, color = Palette.textSecondary)
                 }
                 OuraComparisonPlot(traces, axes, from, to, cursor, descriptions.joinToString("\n"),
@@ -179,7 +162,7 @@ private fun OuraComparisonPlot(traces: List<OuraCompareTrace>, axes: Map<String,
                 val p = point(ui, bucket.start + (bucket.end - bucket.start) / 2, bucket.median)
                 if (i == 0 || buckets[i - 1].end != bucket.start) path.moveTo(p.x, p.y) else path.lineTo(p.x, p.y)
             }
-            path to comparisonStroke(index)
+            path to ouraTraceStroke(ouraComparisonTraceStyle(index))
         }
         onDrawBehind {
             clipRect {
@@ -201,14 +184,4 @@ private fun OuraComparisonPlot(traces: List<OuraCompareTrace>, axes: Map<String,
             }
         }
     })
-}
-
-private fun Density.comparisonStroke(index: Int): Stroke {
-    val effect = when (index) {
-        1 -> PathEffect.dashPathEffect(floatArrayOf(Metrics.space12.toPx(), Metrics.space4.toPx()))
-        2 -> PathEffect.dashPathEffect(floatArrayOf(Metrics.space2.toPx(), Metrics.space4.toPx()))
-        3 -> PathEffect.dashPathEffect(floatArrayOf(Metrics.space8.toPx(), Metrics.space4.toPx(), Metrics.space2.toPx(), Metrics.space4.toPx()))
-        else -> null
-    }
-    return Stroke(Metrics.space2.toPx(), cap = StrokeCap.Round, pathEffect = effect)
 }

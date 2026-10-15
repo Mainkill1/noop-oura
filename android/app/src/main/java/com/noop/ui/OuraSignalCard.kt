@@ -84,6 +84,10 @@ internal fun OuraSignalCard(
                     Text(format(summary.mean!!), style = NoopType.title1, color = Palette.textPrimary)
                     Text(stringResource(R.string.explore_average), style = NoopType.caption, color = Palette.textSecondary)
                 }
+                OuraChartLegend(buildList {
+                    add(OuraLegendEntry("median", stringResource(R.string.oura_legend_median), unit, Palette.accent, OuraTraceStyle.Solid))
+                    if (showRange) add(OuraLegendEntry("range", stringResource(R.string.oura_legend_range), unit, Palette.accent, OuraTraceStyle.Range))
+                })
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Metrics.space8)) {
                     Column(Modifier.width(Metrics.chartAxisLabelWidth).height(Metrics.chartHeight), verticalArrangement = Arrangement.SpaceBetween) {
                         Text(String.format(locale, "%.1f", domain.second), style = NoopType.captionNumber, color = Palette.textSecondary,
@@ -175,7 +179,7 @@ private fun OuraSignalPlot(
             val ranges = Path().apply {
                 buckets.forEach { addRect(Rect(x(it.start), y(it.maximum), x(it.end), y(it.minimum))) }
             }
-            val stroke = Stroke(width = Metrics.space2.toPx(), cap = StrokeCap.Round)
+            val stroke = ouraTraceStroke(OuraTraceStyle.Solid)
             val radius = Metrics.space2.toPx()
             onDrawBehind {
                 for (fraction in listOf(0f, 0.5f, 1f)) {

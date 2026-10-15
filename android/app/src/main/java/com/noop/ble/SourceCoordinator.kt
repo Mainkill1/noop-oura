@@ -157,6 +157,8 @@ class SourceCoordinator(
      *  [OuraLiveSource.LinkPhase.DISCONNECTED] when no ring source is live. Mirrors [ouraBatteryPct]. */
     private val _ouraLinkPhase = MutableStateFlow(OuraLiveSource.LinkPhase.DISCONNECTED)
     val ouraLinkPhase: StateFlow<OuraLiveSource.LinkPhase> = _ouraLinkPhase.asStateFlow()
+    private val _ouraOxygenFeatureStatus = MutableStateFlow<com.noop.oura.OuraFeatureStatus?>(null)
+    val ouraOxygenFeatureStatus: StateFlow<com.noop.oura.OuraFeatureStatus?> = _ouraOxygenFeatureStatus.asStateFlow()
 
     /** Collects the active Oura source's adoptPhase / needsPairing into the mirrors above; cancelled and
      *  nulled on teardown so a forgotten ring never leaks a stale outcome. */
@@ -629,6 +631,7 @@ class SourceCoordinator(
             launch { source.ouraWearState.collect { _ouraWearState.value = it } }
             launch { source.batteryPct.collect { _ouraBatteryPct.value = it } }   // #2075
             launch { source.liveSession.collect { _ouraLiveSession.value = it } }
+            launch { source.oxygenFeatureStatus.collect { _ouraOxygenFeatureStatus.value = it } }
             launch { source.historySyncPhase.collect { _ouraHistorySyncPhase.value = it } }
             launch { source.linkPhase.collect { _ouraLinkPhase.value = it } }     // #2305
         }
@@ -681,6 +684,7 @@ class SourceCoordinator(
         _ouraWearState.value = null   // #628: no live Oura source -> no wear badge
         _ouraBatteryPct.value = null  // #2075: nor a stale ring charge
         _ouraLiveSession.value = OuraLiveSessionSnapshot()
+        _ouraOxygenFeatureStatus.value = null
         _ouraHistorySyncPhase.value = OuraHistorySyncPhase.IDLE
         _ouraLinkPhase.value = OuraLiveSource.LinkPhase.DISCONNECTED   // #2305
         // A stale speed/cadence/power readout must not outlive the strap session (the source's own stop()

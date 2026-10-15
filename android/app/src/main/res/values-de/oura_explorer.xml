@@ -77,4 +77,17 @@
     <string name="oura_host_sample_count">%1$d Vektoren</string>
     <string name="oura_host_axis_detail">%1$s: Mittel %2$s · Min %3$d · Max %4$d</string>
     <string name="oura_host_receipt_bounds">Host-Empfang: %1$s – %2$s</string>
+  <string name="oura_legend">Legende</string>
+  <string name="oura_legend_solid">Durchgezogene Linie</string>
+  <string name="oura_legend_dashed">Gestrichelte Linie</string>
+  <string name="oura_legend_dotted">Gepunktete Linie</string>
+  <string name="oura_legend_dash_dot">Strich-Punkt-Linie</string>
+  <string name="oura_legend_median">Median</string>
+  <string name="oura_legend_range">Min.–Max.-Bereich</string>
+  <string name="oura_oxygen_recorded_only">O₂ · nur aufgezeichnet</string>
+  <string name="oura_oxygen_live_unavailable">Kontinuierliches Live-SpO₂ ist über diese Verbindung nicht verfügbar. Sauerstoffmessungen werden im Schlaf erfasst.</string>
+  <string name="oura_oxygen_sensing_off">Der Ring meldet, dass die Sauerstoffmessung aus ist.</string>
+  <string name="oura_oxygen_sensing_on">Der Ring meldet, dass die Sauerstoffmessung eingeschaltet ist.</string>
+  <string name="oura_oxygen_sensing_unknown">Der Status der Sauerstoffmessung ist nicht verfügbar.</string>
+  <string name="oura_oxygen_view_history">Sauerstoffverlauf ansehen</string>
 </resources>

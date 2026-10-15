@@ -38,6 +38,7 @@ fun OuraScreen(vm: AppViewModel, onDevices: () -> Unit, onImport: () -> Unit, on
     val ringLinkPhase by vm.ouraLinkPhase.collectAsStateWithLifecycle()
     val liveSession by vm.ouraLiveSession.collectAsStateWithLifecycle()
     val historyPhase by vm.ouraHistorySyncPhase.collectAsStateWithLifecycle()
+    val oxygenStatus by vm.ouraOxygenFeatureStatus.collectAsStateWithLifecycle()
     val recentDays by vm.recentDays.collectAsStateWithLifecycle()
     var sources by remember { mutableStateOf<List<OuraDashboardSource>>(emptyList()) }
     var sourceId by rememberSaveable { mutableStateOf("") }
@@ -191,7 +192,8 @@ fun OuraScreen(vm: AppViewModel, onDevices: () -> Unit, onImport: () -> Unit, on
                 historyPhase = historyPhase,
                 onComparison = {
                     liveComparisonCsv = it.joinToString(",")
-                }, onHistory = { owner.hide(); mode = OuraViewMode.History }, pendingStart = pendingStart)
+                }, onHistory = { owner.hide(); mode = OuraViewMode.History }, pendingStart = pendingStart,
+                oxygenMode = oxygenStatus?.mode.takeIf { liveEligible && visibleSession.sourceDeviceId == sourceId })
         }
         if (isLive && category == OuraCategory.Health && snapshot != null) item(key = "recorded-health") {
             OuraRecordedHealth(snapshot, tempUnit, onHistory = { owner.hide(); mode = OuraViewMode.History })

@@ -29,6 +29,21 @@ internal fun OuraRecordedHealth(data: OuraDashboardData, temp: TemperatureUnit, 
     }
 }
 
+/** A feature-mode report is configuration evidence; it never supplies a live oxygen value. */
+@Composable
+internal fun OuraLiveOxygenStatus(mode: Int?, onHistory: () -> Unit) {
+    Column(Modifier.testTag("oura-live-oxygen-status"), verticalArrangement = Arrangement.spacedBy(Metrics.space4)) {
+        Text(stringResource(R.string.oura_oxygen_recorded_only), style = NoopType.subhead, color = Palette.textPrimary)
+        Text(stringResource(when (mode) {
+            0 -> R.string.oura_oxygen_sensing_off
+            1, 2, 3 -> R.string.oura_oxygen_sensing_on
+            else -> R.string.oura_oxygen_sensing_unknown
+        }), style = NoopType.caption, color = Palette.textSecondary)
+        Text(stringResource(R.string.oura_oxygen_live_unavailable), style = NoopType.caption, color = Palette.textSecondary)
+        TextButton(onClick = onHistory) { Text(stringResource(R.string.oura_oxygen_view_history)) }
+    }
+}
+
 /** Bounded inspection of stored seconds; full-range means remain in the History graphs. */
 @Composable
 internal fun OuraLiveMotionDetails(records: List<OuraLiveMotionHistory>) {

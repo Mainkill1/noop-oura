@@ -216,7 +216,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      *  coordinator so it can only ever reach the ring that is the live source. */
     fun reconnectOuraRing() = noopApp.sourceCoordinator.reconnectActiveRing()
 
-    /** Direct notification buffers for an explicit live session; no database polling. */
+    /** Read-only configuration report; an enabled mode is not evidence of an oxygen sample. */
+    val ouraOxygenFeatureStatus: StateFlow<com.noop.oura.OuraFeatureStatus?>
+        get() = noopApp.sourceCoordinator.ouraOxygenFeatureStatus
+    /** Direct notification buffers for a page-owned live session; no database polling. */
     val ouraLiveSession: StateFlow<com.noop.ble.OuraLiveSessionSnapshot>
         get() = noopApp.sourceCoordinator.ouraLiveSession
     val ouraHistorySyncPhase: StateFlow<com.noop.ble.OuraHistorySyncPhase>

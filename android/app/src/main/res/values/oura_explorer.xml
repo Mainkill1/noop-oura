@@ -77,4 +77,17 @@
     <string name="oura_host_sample_count">%1$d vectors</string>
     <string name="oura_host_axis_detail">%1$s: mean %2$s · min %3$d · max %4$d</string>
     <string name="oura_host_receipt_bounds">Host receipts: %1$s – %2$s</string>
+  <string name="oura_legend">Legend</string>
+  <string name="oura_legend_solid">Solid line</string>
+  <string name="oura_legend_dashed">Dashed line</string>
+  <string name="oura_legend_dotted">Dotted line</string>
+  <string name="oura_legend_dash_dot">Dash-dot line</string>
+  <string name="oura_legend_median">Median</string>
+  <string name="oura_legend_range">Min–max range</string>
+  <string name="oura_oxygen_recorded_only">O₂ · recorded only</string>
+  <string name="oura_oxygen_live_unavailable">Continuous live SpO₂ is not available in this connection. Oxygen measurements are collected during sleep.</string>
+  <string name="oura_oxygen_sensing_off">The ring reports oxygen sensing is off.</string>
+  <string name="oura_oxygen_sensing_on">The ring reports oxygen sensing is enabled.</string>
+  <string name="oura_oxygen_sensing_unknown">Oxygen sensing status is unavailable.</string>
+  <string name="oura_oxygen_view_history">View oxygen history</string>
 </resources>

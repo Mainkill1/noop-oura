@@ -11,8 +11,6 @@ import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
@@ -34,7 +32,7 @@ private data class OuraLiveTrace(val key: String, val label: String, val unit: S
 internal fun OuraLivePanel(snapshot: OuraLiveSessionSnapshot, nowElapsedMs: Long, category: OuraCategory,
     comparison: Set<String>, eligible: Boolean, connected: Boolean, historyPhase: OuraHistorySyncPhase,
     onComparison: (Set<String>) -> Unit, onHistory: () -> Unit,
-    pendingStart: Boolean = false) {
+    pendingStart: Boolean = false, oxygenMode: Int? = null) {
     var windowSeconds by rememberSaveable { mutableIntStateOf(30) }
     var smoothed by rememberSaveable { mutableStateOf(false) }
     var axesCsv by rememberSaveable { mutableStateOf("x,y,z") }
@@ -102,6 +100,9 @@ internal fun OuraLivePanel(snapshot: OuraLiveSessionSnapshot, nowElapsedMs: Long
                 // Status follows actual accepted workload, independently of desired tab/axis visibility.
                 if ("hr" in keys || snapshot.selection.hr) OuraLiveStreamReadout(allTraces.first(), snapshot.active, connected,
                     snapshot.hr.phase, snapshot.hr.lastReceiptElapsedMs, snapshot.hr.observedRateHz, nowElapsedMs)
+                if (category == OuraCategory.Health && eligible) {
+                    OuraLiveOxygenStatus(oxygenMode.takeIf { connected }, onHistory)
+                }
                 if (category == OuraCategory.Movement || keys.any { it != "hr" } || snapshot.selection.motion) OuraLiveStreamReadout(
                     allTraces[1].copy(label = stringResource(R.string.oura_tab_movement), raw = emptyList()), snapshot.active,
                     connected, snapshot.motion.phase, snapshot.motion.lastReceiptElapsedMs, snapshot.motion.observedRateHz, nowElapsedMs)
@@ -172,6 +173,10 @@ private fun OuraLivePlot(traces: List<OuraLiveTrace>, end: Long, seconds: Int, n
         val values = cursor?.let { ouraLiveInspect(trace.raw, it, trace.gapMs) }.orEmpty()
         trace.label + ": " + if (values.isEmpty()) "—" else values.joinToString(" / ") { formatLive(it.value) + " " + trace.unit }
     }
+    OuraChartLegend(traces.map { trace ->
+        OuraLegendEntry(trace.key, trace.label, trace.unit, trace.color, ouraLiveTraceStyle(trace.key),
+            if (trace.key == "hr") null else trace.raw.lastOrNull()?.let { formatLive(it.value) })
+    })
     Spacer(Modifier.fillMaxWidth().height(Metrics.largeChartHeight).testTag("oura-live-plot").semantics {
         contentDescription = title
         stateDescription = inspection.joinToString()
@@ -204,14 +209,12 @@ private fun OuraLivePlot(traces: List<OuraLiveTrace>, end: Long, seconds: Int, n
                 path
             }
         }
-        val dashUnit = Metrics.space4.toPx()
         onDrawBehind {
             clipRect {
                 for (fraction in listOf(0f, .5f, 1f)) drawLine(Palette.hairline, Offset(0f, fraction * size.height), Offset(size.width, fraction * size.height))
                 paths.forEachIndexed { index, segments ->
-                    val key = traces[index].key
-                    val effect = when (key) { "y" -> PathEffect.dashPathEffect(floatArrayOf(dashUnit * 2, dashUnit)); "z" -> PathEffect.dashPathEffect(floatArrayOf(dashUnit, dashUnit)); else -> null }
-                    segments.forEach { drawPath(it, colors[index], style = Stroke(strokeWidth, pathEffect = effect)) }
+                    val stroke = ouraTraceStroke(ouraLiveTraceStyle(traces[index].key))
+                    segments.forEach { drawPath(it, colors[index], style = stroke) }
                 }
                 cursor?.let { drawLine(Palette.textSecondary, Offset(x(it), 0f), Offset(x(it), size.height), strokeWidth) }
             }
@@ -220,9 +223,6 @@ private fun OuraLivePlot(traces: List<OuraLiveTrace>, end: Long, seconds: Int, n
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Text(stringResource(R.string.oura_live_relative_seconds, seconds), style = NoopType.captionNumber, color = Palette.textSecondary)
         Text(stringResource(R.string.oura_live_window_end), style = NoopType.caption, color = Palette.textSecondary)
-    }
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(Metrics.space8), verticalArrangement = Arrangement.spacedBy(Metrics.space4)) {
-        traces.forEach { trace -> Text(trace.label + (if (trace.key == "hr") " · " else ": " + (trace.raw.lastOrNull()?.let { formatLive(it.value) } ?: "—") + " ") + trace.unit, style = NoopType.captionNumber, color = trace.color) }
     }
     if (cursor != null) {
         val age = ouraLiveAgeSeconds(cursor, now) ?: 0

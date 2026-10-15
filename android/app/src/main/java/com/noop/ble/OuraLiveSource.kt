@@ -215,6 +215,10 @@ class OuraLiveSource(
      *  (a stale value must not outlive the link). Surfaced on the device card like the WHOOP battery. */
     val batteryPct: StateFlow<Int?> = _batteryPct.asStateFlow()
 
+    private val _oxygenFeatureStatus = MutableStateFlow<com.noop.oura.OuraFeatureStatus?>(null)
+    /** Latest read-only oxygen feature report for this connection; not an oxygen measurement. */
+    val oxygenFeatureStatus: StateFlow<com.noop.oura.OuraFeatureStatus?> = _oxygenFeatureStatus.asStateFlow()
+
     private val _needsPairing = MutableStateFlow<String?>(null)
     /** Set to an HONEST explanation when the ring needs a key install / pairing the live flow can't do
      *  (no app key, or the ring is in factory reset). null otherwise; cleared on scan/connect/stop. The
@@ -1362,6 +1366,7 @@ class OuraLiveSource(
         pendingSyncTime = null
         loggedTierBKinds.clear()
         loggedFeatureStatuses.clear()
+        _oxygenFeatureStatus.value = null
         loggedProductInfo.clear()
         pendingAnchorEvents.clear()
         // Per-drain / per-session protocol state starts clean (twin of Swift's connect-setup reset).
@@ -1480,6 +1485,7 @@ class OuraLiveSource(
         pendingSyncTime = null
         loggedTierBKinds.clear()
         loggedFeatureStatuses.clear()
+        _oxygenFeatureStatus.value = null
         loggedProductInfo.clear()
         reachedStreaming = false
         liveHRDemand.reset()
@@ -1650,8 +1656,9 @@ class OuraLiveSource(
                     loggedAnchor = false
                     pendingSyncTime = null
                     loggedTierBKinds.clear()
-        loggedFeatureStatuses.clear()
-        loggedProductInfo.clear()
+                    loggedFeatureStatuses.clear()
+                    _oxygenFeatureStatus.value = null
+                    loggedProductInfo.clear()
                     reachedStreaming = false
                     liveHRDemand.reset()
                     // A disconnect MID-install is an honest failure (no 0x25 ack will arrive); a disconnect
@@ -2398,11 +2405,11 @@ class OuraLiveSource(
 
     /**
      * Log a feature-status read reply once per feature (read-only diagnostic). Confirms, from the ring
-     * itself, whether a server-flag feature (SpO2 0x04 / real_steps 0x0b) is subscribed/emitting — NOOP
-     * cannot enable these offline (server ClientConfiguration gate), so a `subscription == 0` here is the
-     * honest "not a bug, it's a gate" reading. Never scored, never stored.
+     * itself, the current feature mode/status/subscription. An off mode does not identify why it is off,
+     * and a subscription or enabled mode does not establish actual measurement delivery.
      */
     private fun logFeatureStatus(st: com.noop.oura.OuraFeatureStatus) {
+        if (st.feature == OuraCommands.featureSpO2) _oxygenFeatureStatus.value = st
         if (!loggedFeatureStatuses.add(st.feature)) return
         val name = when (st.feature) {
             OuraCommands.featureSpO2 -> "SpO2 (0x04)"
@@ -2410,11 +2417,9 @@ class OuraLiveSource(
             OuraCommands.featureDaytimeHR -> "daytime-HR (0x02)"
             else -> "0x${st.feature.toString(16)}"
         }
-        // A gated/unavailable feature reports ALL-ZERO (mode/status/state); the streaming daytime-HR, by
-        // contrast, reads mode=1 status=0x11 state=2. Flag the all-zero case as the honest "cloud never
-        // enabled it" — NOT `subscription==0` alone, since daytime-HR is subscription=0 yet active.
+        // Report observed state only. All-zero fields do not establish a cloud entitlement cause.
         val off = st.mode == 0 && st.status == 0 && st.state == 0
-        val gate = if (off) " - INACTIVE (server-gated off; the cloud never enabled it, not emitted offline)" else ""
+        val gate = if (off) " - INACTIVE (mode off; cause unknown)" else ""
         // Name the enum fields so the log reads plainly (OURA_PROTOCOL.md s7.1 [ring4-ble]) — e.g. a gated
         // feature prints `mode=0 (off) … subscription=0 (off)`, the active daytime-HR `mode=1 (automatic)`.
         log("Oura: feature status $name mode=${st.mode} (${featureModeName(st.mode)}) status=${st.status} " +

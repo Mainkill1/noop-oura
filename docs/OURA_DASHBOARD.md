@@ -109,6 +109,33 @@ to fabricate measurements. Historical bucket medians are not claimed to be origi
 Settings is directly accessible from the dashboard. Ring credential transfer remains available
 under **Transfer ring keys**. See [Oura key transfer](OURA_KEY_TRANSFER.md).
 
+## Chart keys and oxygen availability (12.3.1)
+
+Live, Compare, and individual History plots have a visible wrapping legend immediately above the plot.
+Each key includes its signal and unit, with the same color and line pattern used by the drawing.
+Individual History plots identify the median line and optional minimum–maximum band. Hidden live
+axes are omitted from the key. Legend patterns are also described to accessibility services.
+
+Live Health displays oxygen availability separately from live HR. The existing read-only feature probe
+supplies the ring's reported oxygen mode: off, enabled, or unavailable. This configuration report is
+cleared on disconnect and never produces an oxygen value, timestamp, or freshness indicator. A mode
+of zero establishes that sensing is off; it does not identify a cloud entitlement or explain why.
+The History action opens recorded Health data.
+
+Continuous calibrated live SpO₂ is not implemented by the current connection. The previous revision
+restored recorded oxygen context, not live oxygen measurement. [Oura's documentation](https://support.ouraring.com/hc/en-us/articles/7328398760851-Blood-Oxygen-Sensing-SpO2)
+describes sensing during sleep; the public [open_oura client guide](https://github.com/Th0rgal/open_oura/blob/e57c43ce5fe0cf9a646afa790bda3731be767507/crates/README.md)
+distinguishes cached latest oxygen from live HR/ACM. Neither justifies marking a cached oxygen value
+as a fresh live sample. No new mode write, subscription, raw optical calibration, or polling workload
+is introduced by this update.
+
+The follow-up passes 37 focused JVM tests, including a real-source notification test that verifies
+status replacement, isolation from other features, no outbound command, and disconnect clearing.
+Full, Demo, and instrumentation APK builds pass, as do localization and doc-comment checks. Four new
+production Compose fixtures cover trace/unit/style legends, hidden-axis stability, range keys, and
+oxygen off/on/unknown without fabricated freshness. Their physical execution and rendered inspection
+remain pending after wireless ADB disconnected when the phone relocked. Code review found no defects.
+
 ## Continuous Live and compact layout verification (12.3.0)
 
 The Android Full JVM suite passes with 6,792 tests, zero failures/errors, and six existing skips.
