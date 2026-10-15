@@ -220,7 +220,7 @@ for (n, rec) in records.enumerated() {
             if liveMotionSummary, let epochMs = rec.tsMs {
                 for xyz in packet.samples {
                     let next = OuraLiveMotionSummary.sample(epochMs: epochMs, xyz: xyz)
-                    motionSummaries[next.ts] = motionSummaries[next.ts]?.merge(next) ?? next
+                    motionSummaries[next.ts] = try motionSummaries[next.ts]?.merge(next) ?? next
                 }
                 continue
             }

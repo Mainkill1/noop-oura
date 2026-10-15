@@ -280,10 +280,10 @@ interface WhoopDao : DeviceRegistryDao {
     /** Caller holds the repository database transaction: concurrent partial seconds cannot lose counts. */
     @Transaction
     suspend fun mergeLiveMotion(row: EventRow): Long {
-        val incoming = requireNotNull(OuraLiveMotionHistory.parse(row.ts, row.payloadJSON)).summary
+        val incoming = requireNotNull(OuraLiveMotionHistory.parse(row.ts, row.payloadJSON)) { "Invalid incoming Oura live motion summary" }.summary
         val previous = eventAt(row.deviceId, row.ts, row.kind)
         val merged = if (previous == null) incoming else
-            requireNotNull(OuraLiveMotionHistory.parse(row.ts, previous.payloadJSON)).summary.merge(incoming)
+            requireNotNull(OuraLiveMotionHistory.parse(row.ts, previous.payloadJSON)) { "Invalid persisted Oura live motion summary" }.summary.merge(incoming)
         return replaceEvent(row.copy(payloadJSON = merged.payloadJSON()))
     }
 

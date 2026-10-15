@@ -15,6 +15,30 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class)
 class OuraLiveMotionPersistenceTest {
+    @Test fun rejectedMergePreservesPreviousRowAndRollsBackOtherWrites() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(RuntimeEnvironment.getApplication(), WhoopDatabase::class.java).build()
+        try {
+            val repo = WhoopRepository(db)
+            repo.upsertDevice("oura-a")
+            val zero = OuraLiveMotionSummary.sample(1000000, OuraRawXYZ(0, 0, 0))
+            val boundary = zero.copy(values = zero.values + ("count" to 281474976710655L)).payloadJSON()
+            db.whoopDao().replaceEvent(EventRow("oura-a", 1000, OuraLiveMotionSummary.EVENT_KIND, boundary))
+            val incoming = StreamBatch(hr = listOf(HrRow(1001, 60)),
+                events = listOf(EventEntry(1000, OuraLiveMotionSummary.EVENT_KIND, zero.payloadJSON())))
+            val failure = runCatching { repo.insert(incoming, "oura-a") }.exceptionOrNull()
+            assertTrue(failure is IllegalArgumentException)
+            assertEquals(boundary, db.whoopDao().eventAt("oura-a", 1000, OuraLiveMotionSummary.EVENT_KIND)!!.payloadJSON)
+            assertTrue(repo.hrSamplesForDevice("oura-a", 1000, 1002).isEmpty())
+            // A malformed previous row also remains available for diagnosis instead of being overwritten.
+            val corrupt = boundary.replace("281474976710655", "9223372036854775807")
+            db.whoopDao().replaceEvent(EventRow("oura-a", 1000, OuraLiveMotionSummary.EVENT_KIND, corrupt))
+            assertNotNull(runCatching { repo.insert(incoming, "oura-a") }.exceptionOrNull())
+            assertEquals(corrupt, db.whoopDao().eventAt("oura-a", 1000, OuraLiveMotionSummary.EVENT_KIND)!!.payloadJSON)
+            val readFailure = runCatching { OuraDashboardData.load(repo, OuraDashboardSource("oura-a", "A"), 999, 1002, 1) }.exceptionOrNull()
+            assertTrue(readFailure?.message?.contains("Invalid persisted Oura live motion summary") == true)
+            assertTrue(repo.hrSamplesForDevice("oura-a", 1000, 1002).isEmpty())
+        } finally { db.close() }
+    }
     @Test fun concurrentPartialSessionsMergeAtomicallyWithoutTouchingOtherSourceOrRingMotion() = runBlocking {
         val db = Room.inMemoryDatabaseBuilder(RuntimeEnvironment.getApplication(), WhoopDatabase::class.java).build()
         try {

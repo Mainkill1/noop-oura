@@ -13,13 +13,32 @@ data class OuraLiveMotionHistory(val ts: Long, val summary: OuraLiveMotionSummar
     fun min(axis: String): Long = summary.values.getValue("min_$axis")
     fun max(axis: String): Long = summary.values.getValue("max_$axis")
     companion object {
+        // Swift twin: `OuraLiveMotionSummary.field`.
+        private val field = """"([a-z_]+)"[ \t\r\n]*:[ \t\r\n]*("(?:host_receipt|raw_signed16)"|-?(?:0|[1-9][0-9]*))"""
+        // Swift twin: `OuraLiveMotionSummary.space`.
+        private val space = """[ \t\r\n]*"""
+        // Swift twin: `OuraLiveMotionSummary.fieldPattern`.
+        private val fieldPattern = Regex(field)
+        // Swift twin: `OuraLiveMotionSummary.payloadShape`.
+        private val payloadShape = Regex(space + "\\{" + space + field + space + "(?:," + space + field + space + ")*\\}" + space)
         // Swift twin: `OuraLiveMotionSummary.parse`.
         fun parse(ts: Long, payload: String): OuraLiveMotionHistory? = runCatching {
             val json = JSONObject(payload)
-            require(json.getString("provenance") == "host_receipt" && json.getString("units") == "raw_signed16")
-            val keys = OuraLiveMotionSummary.sample(0, com.noop.oura.OuraRawXYZ(0, 0, 0)).values.keys
-            val summary = OuraLiveMotionSummary(keys.associateWith { json.getLong(it) })
-            require(summary.ts == ts && summary.values.getValue("count") > 0 && summary.values.getValue("last_receipt_ms") / 1000 == ts)
+            require(json.get("provenance") == "host_receipt" && json.get("units") == "raw_signed16")
+            val keys = OuraLiveMotionSummary.numericKeys
+            require(json.keys().asSequence().toSet() == keys + setOf("provenance", "units"))
+            // Check original tokens rather than normalized numeric values, matching the Swift boundary.
+            require(payloadShape.matches(payload))
+            val fields = fieldPattern.findAll(payload).toList()
+            require(fields.size == json.length())
+            val tokens = fields.associate { it.groupValues[1] to it.groupValues[2] }
+            val summary = OuraLiveMotionSummary(keys.associateWith {
+                val value = json.get(it)
+                require(value is Number) { "Summary fields must be JSON integers" }
+                requireNotNull(tokens.getValue(it).toLongOrNull()) { "Summary fields must be signed64 integer tokens" }
+            })
+            summary.validate()
+            require(summary.ts == ts)
             OuraLiveMotionHistory(ts, summary)
         }.getOrNull()
     }

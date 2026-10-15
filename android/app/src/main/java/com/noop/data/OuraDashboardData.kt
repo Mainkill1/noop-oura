@@ -78,7 +78,9 @@ data class OuraDashboardData(
                         if (value > 0) SignalDecimation.Sample(it.ts, value) else null
                     }
                     val liveMotion = events.filter { it.kind == com.noop.oura.OuraLiveMotionSummary.EVENT_KIND }
-                        .mapNotNull { OuraLiveMotionHistory.parse(it.ts, it.payloadJSON) }
+                        .map { requireNotNull(OuraLiveMotionHistory.parse(it.ts, it.payloadJSON)) {
+                            "Invalid persisted Oura live motion summary at epoch second ${it.ts}; history is incomplete"
+                        } }
                     val liveSignals = linkedMapOf<String, MutableList<SignalDecimation.Sample>>()
                     for (record in liveMotion) {
                         recentLiveMotion.addLast(record)

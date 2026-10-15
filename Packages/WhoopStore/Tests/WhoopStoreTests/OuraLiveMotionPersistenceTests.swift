@@ -4,6 +4,37 @@ import OuraProtocol
 @testable import WhoopStore
 
 final class OuraLiveMotionPersistenceTests: XCTestCase {
+    func testRejectedMergePreservesPriorRowAndRollsBackOtherWrites() async throws {
+        let store = try await WhoopStore.inMemory()
+        let zero = OuraLiveMotionSummary.sample(epochMs: 1000000, xyz: OuraRawXYZ(x: 0, y: 0, z: 0))
+        var values = zero.values; values["count"] = 281474976710655
+        let boundary = try OuraLiveMotionSummary(values: values).payloadJSON()
+        try await store.recordEvent(deviceId: "oura-a", ts: 1000, kind: OuraLiveMotionSummary.eventKind, payloadJSON: boundary)
+        var payload = zero.values.mapValues { ParsedValue.int(Int($0)) }
+        payload["provenance"] = .string("host_receipt"); payload["units"] = .string("raw_signed16")
+        let incoming = Streams(hr: [HRSample(ts: 1001, bpm: 60)],
+                               events: [WhoopEvent(ts: 1000, kind: OuraLiveMotionSummary.eventKind, payload: payload)])
+        do {
+            _ = try await store.insert(incoming, deviceId: "oura-a")
+            XCTFail("A count beyond the arithmetic bound must fail recoverably")
+        } catch { }
+        let rows = try await store.events(deviceId: "oura-a", from: 999, to: 1002, limit: 100)
+        XCTAssertEqual(try WhoopStore.encodePayload(rows[0].payload), boundary)
+        let hr = try await store.hrSamples(deviceId: "oura-a", from: 999, to: 1002, limit: 100)
+        XCTAssertTrue(hr.isEmpty)
+
+        // Seed malformed persisted bytes using the raw app-event boundary; merging must preserve them.
+        let corrupt = boundary.replacingOccurrences(of: "281474976710655", with: "9223372036854775807")
+        try await store.recordEvent(deviceId: "oura-b", ts: 1000, kind: OuraLiveMotionSummary.eventKind, payloadJSON: corrupt)
+        do {
+            _ = try await store.insert(incoming, deviceId: "oura-b")
+            XCTFail("Malformed previous bytes must not be rewritten")
+        } catch { }
+        let corruptRows = try await store.events(deviceId: "oura-b", from: 999, to: 1002, limit: 100)
+        XCTAssertEqual(try WhoopStore.encodePayload(corruptRows[0].payload), corrupt)
+        let otherHR = try await store.hrSamples(deviceId: "oura-b", from: 999, to: 1002, limit: 100)
+        XCTAssertTrue(otherHR.isEmpty)
+    }
     func testConcurrentPartialSecondsMergeWithoutReplacingRingMotionOrAnotherSource() async throws {
         let store = try await WhoopStore.inMemory()
         func streams(_ ms: Int64, _ x: Int) -> Streams {

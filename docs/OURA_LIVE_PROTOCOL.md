@@ -111,6 +111,18 @@ concurrent contributions cannot overwrite one another. These are additive contri
 not replay-idempotent historical rows. Host motion does not advance the ring-history cursor.
 No migration or deletion of existing records is required.
 
+Summary payloads use a fixed flat schema with exact unescaped keys and integer JSON
+literals. Whitespace and property order may vary; missing/duplicate/extra fields,
+Boolean/string/floating values, and integers outside signed64 are rejected. Receipt
+bounds must be ordered in the event's second. Extrema must fit signed16 and be
+consistent with count and sums (a singleton has one value and one receipt time).
+Count is bounded by `Int64.max / 32768` solely to keep raw signed16 sums representable;
+this is not a sensor-rate assumption. Merge validates both inputs, checks arithmetic,
+and fails recoverably before replacing a row. Database errors roll back the complete
+batch, preserving prior bytes. Invalid persisted motion makes dashboard loading report
+incomplete history instead of silently dropping that row.
+
+
 `OuraDashboardData.liveMotionSeconds` exposes the most recent 120 summaries for
 inspection; storage keeps every collected second. Separate graph ids are
 `live_motion_x/y/z` (per-second means), `live_motion_x/y/z_min`,
