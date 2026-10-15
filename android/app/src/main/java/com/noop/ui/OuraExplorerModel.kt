@@ -1,6 +1,6 @@
 package com.noop.ui
 
-internal enum class OuraViewMode { Live, History }
+internal enum class OuraViewMode { History, Live }
 internal enum class OuraCategory { Health, Sleep, Movement, Compare }
 
 /** One catalog drives category summaries, charts, and the cross-category comparison picker. */

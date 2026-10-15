@@ -5,9 +5,6 @@
   <string name="oura_tab_movement">Bewegung</string>
   <string name="oura_live_requires_ring">Live erfordert, dass der ausgewählte Ring das aktive Oura-Gerät ist.</string>
   <string name="oura_live_disconnected">Ring getrennt</string>
-  <string name="oura_live_fresh">Frischer Herzfrequenz-Stream</string>
-  <string name="oura_live_waiting">Warten auf aktuelle Herzfrequenz</string>
-  <string name="oura_live_info">Die letzten 15 Minuten werden alle fünf Sekunden aktualisiert. Andere Sensoren zeigen ihre letzte aufgezeichnete Messung und können seltener aktualisiert werden.</string>
   <string name="oura_sleep_history">Schlafsitzungen sind im Verlauf verfügbar.</string>
   <string name="oura_latest_recorded_info">Zuletzt aufgezeichnete Werte mit Messzeiten. Fehlende Werte haben keine Messung in den letzten 15 Minuten.</string>
   <string name="oura_bucket_width_seconds">Medianintervalle: %1$d Sekunden</string>
@@ -27,4 +24,35 @@
   <string name="oura_compare_count">%1$d von 4 ausgewählt</string>
   <string name="oura_compare_choose">Signale zum Vergleichen auswählen.</string>
   <string name="oura_compare_bounds">%1$s – %2$s %3$s</string>
+  <string name="oura_live_running">Live-Sitzung läuft</string>
+  <string name="oura_live_stopped">Live gestoppt</string>
+  <string name="oura_live_connected">Ring verbunden</string>
+  <string name="oura_live_history_syncing">Verlauf wird heruntergeladen</string>
+  <string name="oura_live_history_paused">Verlauf für Live pausiert</string>
+  <string name="oura_live_history_idle">Verlauf inaktiv</string>
+  <string name="oura_live_start">Live starten</string>
+  <string name="oura_live_stop">Live stoppen</string>
+  <string name="oura_live_motion_limit">Bewegungssitzungen enden nach einer Minute. XYZ sind Rohwerte, keine kalibrierten g.</string>
+  <string name="oura_live_waiting_samples">Warten auf erste Messwerte</string>
+  <string name="oura_live_receiving">Messwerte werden empfangen</string>
+  <string name="oura_live_no_new_samples">Keine neuen Messwerte</string>
+  <string name="oura_live_unavailable">Stream nicht verfügbar; stoppen und ausdrücklich neu starten</string>
+  <string name="oura_live_raw">Roh</string>
+  <string name="oura_live_smoothed">Geglättet</string>
+  <string name="oura_live_trend_info">Geglättet zeigt den nachlaufenden 3-Sekunden-HF-Mittelwert. Letzter Wert und Inspektion zeigen immer Rohwerte.</string>
+  <string name="oura_live_raw_counts">Rohwerte</string>
+  <string name="oura_live_window_seconds">%1$d s</string>
+  <string name="oura_live_observed_rate">Beobachtet: %1$s Messwerte/s</string>
+  <string name="oura_live_plot_info">Tippen oder ziehen, um rohe Empfangswerte zu prüfen. Lücken bleiben leer. X durchgezogen, Y gestrichelt, Z gepunktet.</string>
+  <string name="oura_live_relative_seconds">−%1$d s</string>
+  <string name="oura_live_window_end">Fensterende</string>
+  <plurals name="oura_live_received_seconds">
+    <item quantity="one">Vor %1$d Sekunde aktualisiert</item>
+    <item quantity="other">Vor %1$d Sekunden aktualisiert</item>
+  </plurals>
+  <plurals name="oura_live_remaining_seconds">
+    <item quantity="one">Noch %1$d Sekunde</item>
+    <item quantity="other">Noch %1$d Sekunden</item>
+  </plurals>
+  <string name="oura_live_starting">Live wird gestartet…</string>
 </resources>

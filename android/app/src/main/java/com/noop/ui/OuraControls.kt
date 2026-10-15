@@ -50,7 +50,7 @@ internal fun OuraControls(
                         }
                     }
                 }
-                IconButton(onClick = onRefresh, enabled = !loading) {
+                if (!isLive) IconButton(onClick = onRefresh, enabled = !loading) {
                     Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.oura_refresh))
                 }
                 Box {
@@ -95,7 +95,7 @@ internal fun OuraControls(
                         " – " + day.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)),
                     style = NoopType.captionNumber, color = Palette.textSecondary)
             }
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            if (!isLive) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Row(Modifier.weight(1f).toggleable(value = showRange, role = Role.Switch, onValueChange = onRanges),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(Metrics.space8)) {
@@ -107,7 +107,7 @@ internal fun OuraControls(
                 }
             }
             // Reserve the progress slot so refresh never moves the surrounding controls.
-            Box(Modifier.fillMaxWidth().height(Metrics.space4)) {
+            if (!isLive) Box(Modifier.fillMaxWidth().height(Metrics.space4)) {
                 if (loading) LinearProgressIndicator(Modifier.fillMaxWidth(), color = Palette.accent)
             }
         }

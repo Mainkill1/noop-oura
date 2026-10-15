@@ -5,9 +5,6 @@
   <string name="oura_tab_movement">Movimiento</string>
   <string name="oura_live_requires_ring">El modo en directo requiere que el anillo seleccionado sea el dispositivo Oura activo.</string>
   <string name="oura_live_disconnected">Anillo desconectado</string>
-  <string name="oura_live_fresh">Flujo reciente de frecuencia cardíaca</string>
-  <string name="oura_live_waiting">Esperando una frecuencia cardíaca reciente</string>
-  <string name="oura_live_info">Los últimos 15 minutos se actualizan cada cinco segundos. Los demás sensores muestran su última lectura registrada y pueden actualizarse con menos frecuencia.</string>
   <string name="oura_sleep_history">Las sesiones de sueño están disponibles en Historial.</string>
   <string name="oura_latest_recorded_info">Últimos valores registrados, con la hora de lectura. Los valores ausentes no tienen lecturas en los últimos 15 minutos.</string>
   <string name="oura_bucket_width_seconds">Intervalos de mediana: %1$d segundos</string>
@@ -27,4 +24,35 @@
   <string name="oura_compare_count">%1$d de 4 seleccionadas</string>
   <string name="oura_compare_choose">Selecciona señales para comparar.</string>
   <string name="oura_compare_bounds">%1$s – %2$s %3$s</string>
+  <string name="oura_live_running">Sesión en directo activa</string>
+  <string name="oura_live_stopped">Directo detenido</string>
+  <string name="oura_live_connected">Anillo conectado</string>
+  <string name="oura_live_history_syncing">Descargando historial</string>
+  <string name="oura_live_history_paused">Historial pausado para el directo</string>
+  <string name="oura_live_history_idle">Historial inactivo</string>
+  <string name="oura_live_start">Iniciar directo</string>
+  <string name="oura_live_stop">Detener directo</string>
+  <string name="oura_live_motion_limit">Las sesiones de movimiento terminan al minuto. XYZ son valores brutos, no g calibradas.</string>
+  <string name="oura_live_waiting_samples">Esperando las primeras muestras</string>
+  <string name="oura_live_receiving">Recibiendo muestras</string>
+  <string name="oura_live_no_new_samples">Sin muestras nuevas</string>
+  <string name="oura_live_unavailable">Flujo no disponible; detén e inicia explícitamente para reintentar</string>
+  <string name="oura_live_raw">Bruto</string>
+  <string name="oura_live_smoothed">Suavizado</string>
+  <string name="oura_live_trend_info">Suavizado muestra la media de FC de los últimos 3 segundos. El último valor y la inspección siempre muestran muestras brutas.</string>
+  <string name="oura_live_raw_counts">valores brutos</string>
+  <string name="oura_live_window_seconds">%1$d s</string>
+  <string name="oura_live_observed_rate">Observado: %1$s muestras/s</string>
+  <string name="oura_live_plot_info">Toca o arrastra para inspeccionar las muestras recibidas. Los huecos quedan vacíos. X continua, Y discontinua, Z punteada.</string>
+  <string name="oura_live_relative_seconds">−%1$d s</string>
+  <string name="oura_live_window_end">Fin de ventana</string>
+  <plurals name="oura_live_received_seconds">
+    <item quantity="one">Actualizado hace %1$d segundo</item>
+    <item quantity="other">Actualizado hace %1$d segundos</item>
+  </plurals>
+  <plurals name="oura_live_remaining_seconds">
+    <item quantity="one">Queda %1$d segundo</item>
+    <item quantity="other">Quedan %1$d segundos</item>
+  </plurals>
+  <string name="oura_live_starting">Iniciando directo…</string>
 </resources>

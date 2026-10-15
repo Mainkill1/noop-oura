@@ -5,6 +5,7 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.input.pointer.pointerInput
 import com.noop.R
@@ -23,7 +24,7 @@ internal fun OuraExplorerNavigation(mode: OuraViewMode, category: OuraCategory,
             label = { if (it == OuraViewMode.Live) liveLabel else historyLabel },
             onSelect = onMode, adaptsToAvailableWidth = true, modifier = Modifier.fillMaxWidth().pointerInput(Unit) {
                 fun select(x: Float) {
-                    val target = if (x < size.width / 2f) OuraViewMode.Live else OuraViewMode.History
+                    val target = if (x < size.width / 2f) OuraViewMode.History else OuraViewMode.Live
                     if (target != currentMode) currentOnMode(target)
                 }
                 detectHorizontalDragGestures(onDragStart = { select(it.x) }) { change, _ ->
@@ -31,9 +32,7 @@ internal fun OuraExplorerNavigation(mode: OuraViewMode, category: OuraCategory,
                 }
             },
             accessibilityLabel = stringResource(R.string.oura_view_mode))
-        ScrollableTabRow(selectedTabIndex = category.ordinal, containerColor = Palette.surfaceBase,
-            contentColor = Palette.accent, edgePadding = Metrics.space4,
-            divider = { HorizontalDivider(color = Palette.hairline) }) {
+        val tabs: @Composable () -> Unit = {
             OuraCategory.entries.forEach { item ->
                 Tab(selected = item == category, onClick = { onCategory(item) },
                     selectedContentColor = Palette.accent, unselectedContentColor = Palette.textSecondary,
@@ -45,5 +44,10 @@ internal fun OuraExplorerNavigation(mode: OuraViewMode, category: OuraCategory,
                     }), style = NoopType.subhead) })
             }
         }
+        if (LocalDensity.current.fontScale >= 1.5f) ScrollableTabRow(selectedTabIndex = category.ordinal,
+            containerColor = Palette.surfaceBase, contentColor = Palette.accent, edgePadding = Metrics.space4,
+            divider = { HorizontalDivider(color = Palette.hairline) }, tabs = tabs)
+        else TabRow(selectedTabIndex = category.ordinal, containerColor = Palette.surfaceBase,
+            contentColor = Palette.accent, divider = { HorizontalDivider(color = Palette.hairline) }, tabs = tabs)
     }
 }

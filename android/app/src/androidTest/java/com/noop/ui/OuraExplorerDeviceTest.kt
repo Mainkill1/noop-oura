@@ -35,7 +35,7 @@ class OuraExplorerDeviceTest {
         assertEquals(OuraCategory.Movement, category)
         captureEvidence("explorer-navigation")
         compose.onNodeWithText("Sleep").performClick().assertIsSelected()
-        compose.onNodeWithContentDescription("Live or history").performTouchInput { swipeLeft() }
+        compose.onNodeWithContentDescription("Live or history").performTouchInput { swipeRight() }
         assertEquals(OuraViewMode.Live, mode)
         assertEquals(OuraCategory.Sleep, category)
     }

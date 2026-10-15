@@ -214,7 +214,7 @@ class OuraDashboardDeviceTest {
         val vm = ViewModelProvider(store, ViewModelProvider.AndroidViewModelFactory.getInstance(app))[AppViewModel::class.java]
         val restoration = StateRestorationTester(compose)
         try {
-            restoration.setContent { TestTheme { OuraScreen(vm, {}, {}) } }
+            restoration.setContent { TestTheme { OuraScreen(vm, {}, {}, {}) } }
             compose.waitUntil(10_000) {
                 compose.onAllNodesWithText("Oura export").fetchSemanticsNodes().isNotEmpty()
             }

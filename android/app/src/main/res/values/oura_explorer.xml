@@ -5,9 +5,6 @@
   <string name="oura_tab_movement">Movement</string>
   <string name="oura_live_requires_ring">Live requires the selected ring to be the active Oura device.</string>
   <string name="oura_live_disconnected">Ring disconnected</string>
-  <string name="oura_live_fresh">Fresh heart rate stream</string>
-  <string name="oura_live_waiting">Waiting for fresh heart rate</string>
-  <string name="oura_live_info">The last 15 minutes update every five seconds. Other sensors show their latest recorded observation and may update less often.</string>
   <string name="oura_sleep_history">Sleep sessions are available in History.</string>
   <string name="oura_latest_recorded_info">Latest recorded values, with observation times. Missing values have no reading in the last 15 minutes.</string>
   <string name="oura_bucket_width_seconds">Median buckets: %1$d seconds</string>
@@ -27,4 +24,35 @@
   <string name="oura_compare_count">%1$d of 4 selected</string>
   <string name="oura_compare_choose">Select signals to compare.</string>
   <string name="oura_compare_bounds">%1$s – %2$s %3$s</string>
+  <string name="oura_live_running">Live session running</string>
+  <string name="oura_live_stopped">Live stopped</string>
+  <string name="oura_live_connected">Ring connected</string>
+  <string name="oura_live_history_syncing">History downloading</string>
+  <string name="oura_live_history_paused">History paused for live</string>
+  <string name="oura_live_history_idle">History idle</string>
+  <string name="oura_live_start">Start live</string>
+  <string name="oura_live_stop">Stop live</string>
+  <string name="oura_live_motion_limit">Motion sessions stop after one minute. XYZ are raw counts, not calibrated g.</string>
+  <string name="oura_live_waiting_samples">Waiting for first samples</string>
+  <string name="oura_live_receiving">Receiving samples</string>
+  <string name="oura_live_no_new_samples">No new samples</string>
+  <string name="oura_live_unavailable">Stream unavailable; stop and explicitly start to try again</string>
+  <string name="oura_live_raw">Raw</string>
+  <string name="oura_live_smoothed">Smoothed</string>
+  <string name="oura_live_trend_info">Smoothed shows a trailing 3-second HR mean. Latest values and inspection always show raw samples.</string>
+  <string name="oura_live_raw_counts">raw counts</string>
+  <string name="oura_live_window_seconds">%1$d s</string>
+  <string name="oura_live_observed_rate">Observed: %1$s samples/s</string>
+  <string name="oura_live_plot_info">Tap or drag to inspect raw receipts. Gaps stay blank. X is solid, Y dashed, Z dotted.</string>
+  <string name="oura_live_relative_seconds">−%1$d s</string>
+  <string name="oura_live_window_end">Window end</string>
+  <plurals name="oura_live_received_seconds">
+    <item quantity="one">Updated %1$d second ago</item>
+    <item quantity="other">Updated %1$d seconds ago</item>
+  </plurals>
+  <plurals name="oura_live_remaining_seconds">
+    <item quantity="one">%1$d second remaining</item>
+    <item quantity="other">%1$d seconds remaining</item>
+  </plurals>
+  <string name="oura_live_starting">Starting live…</string>
 </resources>

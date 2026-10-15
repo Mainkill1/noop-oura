@@ -228,9 +228,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun stopOuraLiveSession(expectedSourceDeviceId: String, expectedGeneration: Long) =
         noopApp.sourceCoordinator.stopOuraLiveSession(expectedSourceDeviceId, expectedGeneration)
 
-    /** Dashboard lifecycle and selected signals control only the Oura live-HR feature. */
-    fun requestOuraDashboardLiveHR(wanted: Boolean?) = noopApp.sourceCoordinator.setOuraDashboardLiveHR(wanted)
-
     /** WHOOP-style day streak (#569): consecutive local days that carry a Charge score, computed on
      *  device from the merged daily metrics. A day "qualifies" when its [com.noop.data.DailyMetric] has a
      *  non-null `recovery`. Pure math lives in [com.noop.analytics.StreakCalculator] (Swift/Kotlin twin). */

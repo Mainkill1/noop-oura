@@ -755,7 +755,8 @@ fun AppRoot(viewModel: AppViewModel = viewModel()) {
                 composable(Destination.AppleHealth.route) { AppleHealthScreen(viewModel) }
                 composable(Destination.Oura.route) {
                     OuraScreen(viewModel, onDevices = { nav.navigate(Destination.Devices.route) },
-                        onImport = { nav.navigate(Destination.DataSources.route) })
+                        onImport = { nav.navigate(Destination.DataSources.route) },
+                        onSettings = { nav.navigate(Destination.Settings.route) })
                 }
                 composable(Destination.Devices.route) {
                     DevicesScreen(

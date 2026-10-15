@@ -186,9 +186,6 @@ class SourceCoordinator(
         (activeSource as? OuraLiveSource)?.stopLiveSession(expectedSourceDeviceId, expectedGeneration)
     }
 
-    /** Compatibility for the previous dashboard: it cannot acquire or stop explicit session work. */
-    @Suppress("UNUSED_PARAMETER")
-    fun setOuraDashboardLiveHR(wanted: Boolean?) = Unit
     /** The deviceId the active non-WHOOP source ([activeSource]) runs for. */
     private var activeStrapId: String? = null
     /** The WHOOP registry id we last pointed the connection at, so a WHOOP→WHOOP switch is detected and a

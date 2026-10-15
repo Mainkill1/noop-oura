@@ -3,6 +3,9 @@ package com.noop.ui
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
+import android.os.SystemClock
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
@@ -14,8 +17,6 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import com.noop.R
-import com.noop.analytics.OuraLivePresentation
-import com.noop.analytics.SignalDecimation
 import com.noop.data.OuraDashboardData
 import com.noop.data.OuraDashboardSource
 import com.noop.data.SourceKind
@@ -29,12 +30,14 @@ import kotlin.coroutines.coroutineContext
 private data class OuraLoadedWindow(val key: String, val from: Long, val to: Long, val bucket: Long, val data: OuraDashboardData)
 
 @Composable
-fun OuraScreen(vm: AppViewModel, onDevices: () -> Unit, onImport: () -> Unit) {
+fun OuraScreen(vm: AppViewModel, onDevices: () -> Unit, onImport: () -> Unit, onSettings: () -> Unit) {
     var showKeyTransfer by remember { mutableStateOf(false) }
     if (showKeyTransfer) OuraKeyTransferDialog(onDismiss = { showKeyTransfer = false })
     val activeId by vm.activeStrapIdFlow.collectAsStateWithLifecycle()
     val activeIsOura by vm.activeIsOura.collectAsStateWithLifecycle()
-    val live by vm.live.collectAsStateWithLifecycle()
+    val ringLinkPhase by vm.ouraLinkPhase.collectAsStateWithLifecycle()
+    val liveSession by vm.ouraLiveSession.collectAsStateWithLifecycle()
+    val historyPhase by vm.ouraHistorySyncPhase.collectAsStateWithLifecycle()
     val recentDays by vm.recentDays.collectAsStateWithLifecycle()
     var sources by remember { mutableStateOf<List<OuraDashboardSource>>(emptyList()) }
     var sourceId by rememberSaveable { mutableStateOf("") }
@@ -42,14 +45,14 @@ fun OuraScreen(vm: AppViewModel, onDevices: () -> Unit, onImport: () -> Unit) {
     var dayEpoch by rememberSaveable { mutableLongStateOf(LocalDate.now().toEpochDay()) }
     val day = LocalDate.ofEpochDay(dayEpoch)
     var days by rememberSaveable { mutableIntStateOf(1) }
-    var mode by rememberSaveable { mutableStateOf(OuraViewMode.History) }
+    var mode by remember { mutableStateOf(OuraViewMode.History) }
     var category by rememberSaveable { mutableStateOf(OuraCategory.Health) }
     var showRange by rememberSaveable { mutableStateOf(false) }
     var revision by remember { mutableIntStateOf(0) }
     var loaded by remember { mutableStateOf<OuraLoadedWindow?>(null) }
     var loading by remember { mutableStateOf(true) }
     var errorKey by remember { mutableStateOf<String?>(null) }
-    var clockNow by remember { mutableLongStateOf(System.currentTimeMillis() / 1000) }
+    var elapsedNow by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
     val source = sources.firstOrNull { it.id == sourceId }
     val imported = source?.isImport == true
     val isLive = mode == OuraViewMode.Live
@@ -69,16 +72,33 @@ fun OuraScreen(vm: AppViewModel, onDevices: () -> Unit, onImport: () -> Unit) {
         mutableStateOf(if (imported) "rhr,hrv,skin_temp_dev_c" else "hr,temperature,movement")
     }
 
-    // This clock only expires freshness badges; it never manufactures sensor samples.
+    var pendingStart by remember { mutableStateOf(false) }
+    val owner = remember(vm) {
+        OuraLiveOwner { intent ->
+            if (intent.action == OuraLiveAction.Start) pendingStart = true
+            if (intent.action == OuraLiveAction.Stop) pendingStart = false
+            when (intent.action) {
+                OuraLiveAction.Start -> vm.startOuraLiveSession(intent.selection, intent.sourceId, intent.generation)
+                OuraLiveAction.Update -> vm.updateOuraLiveSession(intent.selection, intent.sourceId, intent.generation)
+                OuraLiveAction.Stop -> vm.stopOuraLiveSession(intent.sourceId, intent.generation)
+            }
+        }
+    }
+    SideEffect {
+        owner.observe(liveSession)
+        pendingStart = owner.hasOwnership && !liveSession.active
+    }
+    OuraLiveLifecycle(owner, lifecycle, sourceId, isLive)
+    // Monotonic display clock never creates or requests samples.
     LaunchedEffect(isLive, lifecycle) {
         if (isLive) lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            while (true) { clockNow = System.currentTimeMillis() / 1000; delay(1000) }
+            while (true) { elapsedNow = SystemClock.elapsedRealtime(); delay(100) }
         }
     }
 
     LaunchedEffect(windowKey, revision, activeId, activeIsOura, recentDays, lifecycle) {
         var selected: OuraDashboardSource? = null
-        refreshOuraWindow(lifecycle, isLive, windowKey, { currentWindow }, prepare = {
+        refreshOuraWindow(lifecycle, false, windowKey, { currentWindow }, prepare = {
             loading = true
             errorKey = null
             delay(Motion.durationFast.toLong())
@@ -93,7 +113,7 @@ fun OuraScreen(vm: AppViewModel, onDevices: () -> Unit, onImport: () -> Unit) {
             }
             val choice = sources.first { it.id == sourceId }
             selected = choice
-            if (isLive && (!activeIsOura || choice.isImport || choice.id != activeId)) {
+            if (isLive) {
                 loading = false
                 return@refreshOuraWindow false
             }
@@ -111,9 +131,8 @@ fun OuraScreen(vm: AppViewModel, onDevices: () -> Unit, onImport: () -> Unit) {
             }
             true
         }, load = {
-            val now = System.currentTimeMillis() / 1000
-            val (from, to) = if (isLive) OuraLivePresentation.window(now) else historyFrom to historyTo
-            val bucket = if (isLive) 5L else historyBucket
+            val (from, to) = historyFrom to historyTo
+            val bucket = historyBucket
             OuraLoadedWindow(windowKey, from, to, bucket,
                 OuraDashboardData.load(vm.repo, requireNotNull(selected), from, to, bucket))
         }, publish = {
@@ -132,50 +151,53 @@ fun OuraScreen(vm: AppViewModel, onDevices: () -> Unit, onImport: () -> Unit) {
     val metricKeys = ouraCategoryKeys(imported, category)
     val allKeys = ouraCategoryKeys(imported, OuraCategory.Compare)
     val comparison = comparisonCsv.split(',').filter { it in allKeys }.distinct().take(4)
+    var liveComparisonCsv by rememberSaveable { mutableStateOf("hr,x,y,z") }
+    val liveComparison = liveComparisonCsv.split(',').filter { it in listOf("hr", "x", "y", "z") }.toSet()
+    val visibleSession = ouraLiveSnapshotForSource(liveSession, sourceId)
+    fun changeCategory(next: OuraCategory) {
+        category = next
+        if (isLive) owner.update(ouraLiveSelection(next, liveComparison))
+    }
     val showBackground = remember { NoopPrefs.showDayCycleBackground(context) }
     val skyBehindCards = remember { NoopPrefs.skyBehindCards(context) }
     LazyScreenScaffold(
         title = stringResource(R.string.oura_title), subtitle = stringResource(R.string.oura_subtitle),
+        trailing = { IconButton(onClick = onSettings) { Icon(Icons.Filled.Settings, stringResource(R.string.nav_settings)) } },
         topBackground = screenBackdropSlot(showBackground, skyBehindCards),
         fullBleedBackground = screenBackdropFullBleed(showBackground, skyBehindCards),
     ) {
         item(key = "navigation", contentType = "navigation") {
-            OuraExplorerNavigation(mode, category, { mode = it }, { category = it })
+            OuraExplorerNavigation(mode, category, { if (it != mode) owner.stop(); mode = it }, ::changeCategory)
         }
         item(key = "controls", contentType = "controls") {
             OuraControls(sources, sourceId, day, days, showRange, loading,
-                onSource = { sourceId = it }, onDay = { landedSource = sourceId; dayEpoch = it.toEpochDay() },
+                onSource = { if (sourceId != it) owner.stop(); sourceId = it }, onDay = { landedSource = sourceId; dayEpoch = it.toEpochDay() },
                 onDays = { landedSource = sourceId; days = it }, onRanges = { showRange = it },
                 onRefresh = { revision++ }, onDevices = onDevices, onImport = onImport,
                 onKeys = { showKeyTransfer = true }, isLive = isLive)
         }
-        if (isLive) item(key = "live-status", contentType = "status") {
-            NoopCard {
-                Column(verticalArrangement = Arrangement.spacedBy(Metrics.space8)) {
-                    val fresh = OuraLivePresentation.isFresh(liveEligible, live.connected, live.streamingLiveHR,
-                        snapshot?.signals?.get("hr")?.latestTs, clockNow)
-                    Text(stringResource(when {
-                        !liveEligible -> R.string.oura_live_requires_ring
-                        !live.connected -> R.string.oura_live_disconnected
-                        fresh -> R.string.oura_live_fresh
-                        else -> R.string.oura_live_waiting
-                    }), style = NoopType.headline, color = Palette.textPrimary)
-                    Text(stringResource(R.string.oura_live_info), style = NoopType.caption, color = Palette.textSecondary)
-                    if (!liveEligible || category == OuraCategory.Sleep) {
-                        if (category == OuraCategory.Sleep) Text(stringResource(R.string.oura_sleep_history), style = NoopType.body, color = Palette.textSecondary)
-                        NoopButton(stringResource(R.string.oura_history), kind = NoopButtonKind.Secondary, onClick = { mode = OuraViewMode.History })
-                    }
-                }
-            }
+        if (isLive) item(key = "live-panel", contentType = "live") {
+            OuraLivePanel(visibleSession, elapsedNow, category, liveComparison,
+                eligible = liveEligible && liveSession.sourceDeviceId == sourceId,
+                connected = ringLinkPhase == com.noop.ble.OuraLiveSource.LinkPhase.AUTHENTICATED,
+                historyPhase = historyPhase,
+                onStart = {
+                    if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED) && liveEligible)
+                        owner.start(liveSession, ouraLiveSelection(category, liveComparison))
+                }, onStop = owner::stop,
+                onComparison = {
+                    liveComparisonCsv = it.joinToString(",")
+                    owner.update(ouraLiveSelection(category, it))
+                }, onHistory = { owner.stop(); mode = OuraViewMode.History }, pendingStart = pendingStart)
         }
-        if (failed) item(key = "error", contentType = "status") {
+        if (!isLive && failed) item(key = "error", contentType = "status") {
             Column(verticalArrangement = Arrangement.spacedBy(Metrics.space8)) {
                 DataPendingNote(stringResource(R.string.oura_title), stringResource(
                     if (snapshot != null) R.string.oura_refresh_error else R.string.oura_load_error))
                 NoopButton(stringResource(R.string.oura_retry), kind = NoopButtonKind.Secondary, onClick = { revision++ })
             }
         }
-        if (snapshot == null && !failed && (!isLive || liveEligible)) item(key = "loading", contentType = "status") {
+        if (!isLive && snapshot == null && !failed) item(key = "loading", contentType = "status") {
             NoopCard {
                 Column(verticalArrangement = Arrangement.spacedBy(Metrics.space12)) {
                     LinearProgressIndicator(Modifier.fillMaxWidth(), color = Palette.accent)
@@ -183,13 +205,13 @@ fun OuraScreen(vm: AppViewModel, onDevices: () -> Unit, onImport: () -> Unit) {
                 }
             }
         }
-        if (snapshot != null && !(isLive && category == OuraCategory.Sleep)) {
+        if (!isLive && snapshot != null) {
             if (category == OuraCategory.Compare) item(key = "compare:$sourceId", contentType = "compare") {
                 OuraComparisonCard(allKeys, snapshot.signals, window.from, window.to, imported, tempUnit, comparison,
                     { comparisonCsv = it.joinToString(",") })
             } else {
                 if (metricKeys.isNotEmpty()) item(key = "overview:$category", contentType = "overview") {
-                    OuraStatsOverview(snapshot, metricKeys, imported, tempUnit, isLive = isLive, now = clockNow)
+                    OuraStatsOverview(snapshot, metricKeys, imported, tempUnit, isLive = false)
                 }
                 if (category == OuraCategory.Sleep) {
                     if (snapshot.sleeps.isEmpty()) item(key = "no-sleep", contentType = "status") {
