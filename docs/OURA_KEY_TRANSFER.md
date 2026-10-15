@@ -57,7 +57,9 @@ source APK, databases, files and preferences. Ordinary data was copied with the 
 The existing root exporter decrypted the four stored ring keys as the source UID; a one-shot local
 helper imported them through the release app's own encrypted store as its new UID and verified
 all four keys in memory. The temporary plaintext XML was then deleted. No key material or health
-records were transferred to the build host or GitHub. The original app and its Keystore remain
+records were transferred to the build host or GitHub. Target UID ownership and SELinux categories were restored for the copied files. The signed release
+authenticated successfully with the unchanged ring key, and its APK digest matches the distributed
+asset. The debug package was disabled to prevent competing connections; its data and Keystore remain
 available for rollback.
 
 ## File compatibility
