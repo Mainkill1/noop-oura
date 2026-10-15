@@ -114,6 +114,8 @@ class OuraExplicitSessionSourceTest {
         val otherB = OuraLiveSource(RuntimeEnvironment.getApplication(), "oura-other-ring", OuraRingGen.GEN3, { _, _ -> }, { null })
         otherB.stop()
         val replacement = OuraLiveSource(RuntimeEnvironment.getApplication(), "oura-session-test", OuraRingGen.GEN3, { _, _ -> }, { null })
+        assertNotEquals(source.liveSession.value.sourceIncarnation, replacement.liveSession.value.sourceIncarnation)
+        val replacementIncarnation = replacement.liveSession.value.sourceIncarnation
         val replacementDriver = OuraDriver(OuraRingGen.GEN3, null).also {
             it.liveHRWanted = false
             it.nextStep(OuraTransition.AuthCompleted(OuraAuthStatus.SUCCESS))
@@ -129,6 +131,7 @@ class OuraExplicitSessionSourceTest {
         assertTrue(replacement.liveSession.value.active)
         assertEquals(OuraLiveSelection(motion = true), replacement.liveSession.value.selection)
         replacement.stop()
+        assertEquals(replacementIncarnation, replacement.liveSession.value.sourceIncarnation)
     }
 
     @Test fun reactivatedHrNeedsANewSampleEvenWhenTheOldSampleIsRetained() {

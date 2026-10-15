@@ -2033,7 +2033,8 @@ class OuraLiveSource(
         handler.removeCallbacks(liveWorker)
         liveWorkScheduled = false
     }
-    private val _liveSession = MutableStateFlow(OuraLiveSessionSnapshot(sourceDeviceId = deviceId, generation = liveWorkload.generation))
+    private val _liveSession = MutableStateFlow(OuraLiveSessionSnapshot(sourceDeviceId = deviceId, generation = liveWorkload.generation,
+        sourceIncarnation = liveWorkload.sourceIncarnation))
     val liveSession: StateFlow<OuraLiveSessionSnapshot> = _liveSession.asStateFlow()
     private val _historySyncPhase = MutableStateFlow(OuraHistorySyncPhase.IDLE)
     val historySyncPhase: StateFlow<OuraHistorySyncPhase> = _historySyncPhase.asStateFlow()
@@ -2101,7 +2102,7 @@ class OuraLiveSource(
         sessionMemory.snapshot.let { it.active && it.selection.hr }
     private fun publishLiveSession() {
         _liveSession.value = sessionMemory.snapshot.copy(sourceDeviceId = deviceId, generation = liveWorkload.generation,
-            motionDeadlineElapsedMs = null)
+            motionDeadlineElapsedMs = null, sourceIncarnation = liveWorkload.sourceIncarnation)
     }
     private fun ownsLiveSession(expectedDeviceId: String, expectedGeneration: Long?): Boolean =
         expectedDeviceId == deviceId && (expectedGeneration == null || expectedGeneration == liveWorkload.generation ||

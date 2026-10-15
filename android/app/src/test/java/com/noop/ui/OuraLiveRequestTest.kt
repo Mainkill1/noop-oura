@@ -131,4 +131,37 @@ class OuraLiveRequestTest {
         repeat(100) { owner.present(pending.copy(generation = 102), "a", true, true, hr) }
         assertEquals(3, intents.size)
     }
+
+    @Test fun sameIdSourceReplacementRegainsDemandOnceWhileReadyNeverDrops() {
+        val intents = mutableListOf<OuraLiveIntent>()
+        val owner = OuraLiveOwner(intents::add)
+        val hr = OuraLiveSelection(hr = true)
+        val first = OuraLiveSessionSnapshot(sourceDeviceId = "a", sourceIncarnation = 41, generation = 100)
+        owner.present(first, "a", true, true, hr)
+        owner.present(first.copy(active = true, generation = 101), "a", true, true, hr)
+        val replacement = first.copy(sourceIncarnation = 42, generation = 200)
+        owner.present(replacement, "a", true, true, hr)
+        assertEquals(listOf(100L, 200L), intents.filter { it.action == OuraLiveAction.Start }.map { it.generation })
+        repeat(200) { index ->
+            owner.present(replacement.copy(generation = 201L + index,
+                hr = OuraLiveStream(phase = OuraLiveStreamPhase.UNAVAILABLE)), "a", true, true, hr)
+        }
+        assertEquals(2, intents.count { it.action == OuraLiveAction.Start })
+        owner.present(replacement.copy(sourceIncarnation = 43, generation = 500), "a", true, true, hr)
+        assertEquals(listOf(100L, 200L, 500L), intents.filter { it.action == OuraLiveAction.Start }.map { it.generation })
+    }
+
+    @Test fun replacementAfterScreenObservationStartsOnceWithoutAnInterveningNotReadyFrame() {
+        val intents = mutableListOf<OuraLiveIntent>()
+        val owner = OuraLiveOwner(intents::add)
+        val hr = OuraLiveSelection(hr = true)
+        val original = OuraLiveSessionSnapshot(sourceDeviceId = "a", sourceIncarnation = 11, generation = 10)
+        owner.present(original, "a", true, true, hr)
+        owner.observe(original.copy(active = true, generation = 12))
+        val replacement = original.copy(sourceIncarnation = 12, generation = 20)
+        owner.observe(replacement)
+        owner.present(replacement, "a", true, true, hr)
+        repeat(200) { owner.present(replacement.copy(generation = 21), "a", true, true, hr) }
+        assertEquals(listOf(10L, 20L), intents.filter { it.action == OuraLiveAction.Start }.map { it.generation })
+    }
 }

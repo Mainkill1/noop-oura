@@ -16,18 +16,26 @@ internal data class OuraLiveIntent(val action: OuraLiveAction, val sourceId: Str
 
 /** Holds only this screen's accepted ownership alias. Transport owns all scheduling and reconciliation. */
 internal class OuraLiveOwner(private val emit: (OuraLiveIntent) -> Unit) {
-    private var owner: Pair<String, Long>? = null
+    private data class Token(val sourceId: String, val incarnation: Long, val generation: Long) {
+        val identity: Pair<String, Long> get() = sourceId to incarnation
+    }
+    private fun token(snapshot: OuraLiveSessionSnapshot): Token? = snapshot.sourceDeviceId?.let {
+        Token(it, snapshot.sourceIncarnation, snapshot.generation)
+    }
+    private var owner: Token? = null
     private var desired = OuraLiveSelection()
     val hasOwnership: Boolean get() = owner != null
-    private var entry: String? = null
+    private var entry: Pair<String, Long>? = null
     private var awaitingIdle = false
-    private var observed: Pair<String, Long>? = null
-    private var stopped: Pair<String, Long>? = null
-    /** Only visibility, authenticated source identity and desired channels can create a request. */
+    private var observed: Token? = null
+    private var stopped: Token? = null
+    /** Only visibility, authenticated source incarnation and desired channels can create a request. */
     fun present(snapshot: OuraLiveSessionSnapshot, sourceId: String, visible: Boolean,
         ready: Boolean, selection: OuraLiveSelection) {
-        observed = snapshot.sourceDeviceId?.let { it to snapshot.generation }
-        val next = sourceId.takeIf { visible && ready && snapshot.sourceDeviceId == sourceId && (selection.hr || selection.motion) }
+        observed = token(snapshot)
+        val next = observed?.identity?.takeIf {
+            visible && ready && snapshot.sourceDeviceId == sourceId && (selection.hr || selection.motion)
+        }
         if (next != entry) {
             stop()
             entry = next
@@ -45,27 +53,27 @@ internal class OuraLiveOwner(private val emit: (OuraLiveIntent) -> Unit) {
     fun hide() { entry = null; awaitingIdle = false; stop() }
     fun start(snapshot: OuraLiveSessionSnapshot, selection: OuraLiveSelection) {
         if (owner != null || snapshot.active || (!selection.hr && !selection.motion)) return
-        val id = snapshot.sourceDeviceId ?: return
-        owner = id to snapshot.generation
+        val accepted = token(snapshot) ?: return
+        owner = accepted
         desired = selection
-        emit(OuraLiveIntent(OuraLiveAction.Start, id, snapshot.generation, selection))
+        emit(OuraLiveIntent(OuraLiveAction.Start, accepted.sourceId, accepted.generation, selection))
     }
     fun observe(snapshot: OuraLiveSessionSnapshot) {
-        observed = snapshot.sourceDeviceId?.let { it to snapshot.generation }
+        observed = token(snapshot)
         val owned = owner ?: return
-        if (snapshot.sourceDeviceId != owned.first || (!snapshot.active && snapshot.generation != owned.second)) owner = null
+        if (observed?.identity != owned.identity || (!snapshot.active && snapshot.generation != owned.generation)) owner = null
     }
     fun update(selection: OuraLiveSelection) {
         val owned = owner ?: return
         if (selection == desired) return
         desired = selection
-        emit(OuraLiveIntent(OuraLiveAction.Update, owned.first, owned.second, selection))
+        emit(OuraLiveIntent(OuraLiveAction.Update, owned.sourceId, owned.generation, selection))
     }
     fun stop() {
         val owned = owner ?: return
-        stopped = observed?.takeIf { it.first == owned.first } ?: owned
+        stopped = observed?.takeIf { it.identity == owned.identity } ?: owned
         owner = null
-        emit(OuraLiveIntent(OuraLiveAction.Stop, owned.first, owned.second))
+        emit(OuraLiveIntent(OuraLiveAction.Stop, owned.sourceId, owned.generation))
     }
 }
 

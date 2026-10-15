@@ -12,7 +12,8 @@ data class OuraLiveStream<T>(val samples: List<T> = emptyList(), val phase: Oura
 data class OuraLiveSessionSnapshot(val active: Boolean = false, val generation: Long = 0, val selection: OuraLiveSelection = OuraLiveSelection(),
     val startedAtElapsedMs: Long? = null, val sourceDeviceId: String? = null,
     val motionDeadlineElapsedMs: Long? = null, val hr: OuraLiveStream<OuraLiveHrSample> = OuraLiveStream(),
-    val motion: OuraLiveStream<OuraLiveMotionSample> = OuraLiveStream())
+    val motion: OuraLiveStream<OuraLiveMotionSample> = OuraLiveStream(),
+    val sourceIncarnation: Long = 0)
 
 /** Notification-only, bounded session memory; historical events have no entry point here. */
 internal class OuraLiveSession {

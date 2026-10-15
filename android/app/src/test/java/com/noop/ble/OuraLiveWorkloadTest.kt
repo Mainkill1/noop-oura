@@ -83,4 +83,17 @@ class OuraLiveWorkloadTest {
         assertTrue(work.acceptsSamples(work.generation, motion = false))
     }
 
+
+    @Test fun sourceIncarnationIsStableAcrossWorkloadGenerationsAndDistinctOnReplacement() {
+        val original = OuraLiveWorkload()
+        val incarnation = original.sourceIncarnation
+        val generation = original.generation
+        original.start(OuraLiveSelection(hr = true)); original.drain()
+        original.update(OuraLiveSelection(true, true)); original.drain()
+        original.stop(); original.drain()
+        original.start(OuraLiveSelection(motion = true)); original.drain()
+        assertEquals(incarnation, original.sourceIncarnation)
+        assertNotEquals(generation, original.generation)
+        assertNotEquals(incarnation, OuraLiveWorkload().sourceIncarnation)
+    }
 }

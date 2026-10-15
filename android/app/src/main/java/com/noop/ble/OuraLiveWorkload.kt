@@ -4,7 +4,8 @@ package com.noop.ble
 internal class OuraLiveWorkload {
     data class Change(val before: OuraLiveSelection?, val after: OuraLiveSelection?, val generation: Long, val newSession: Boolean)
     // Opaque token: incarnation namespace survives A -> B -> A recreation within the process.
-    @Volatile var generation = nextIncarnation.incrementAndGet() shl 32
+    val sourceIncarnation = nextIncarnation.incrementAndGet()
+    @Volatile var generation = sourceIncarnation shl 32
         private set
     private var desired: OuraLiveSelection? = null
     val hasDemand: Boolean get() = desired != null
