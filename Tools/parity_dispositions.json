@@ -300,6 +300,118 @@
       "platform": "kotlin",
       "rationale": "Swift Repository.refresh reads the same imported daily union (unionDailyMetrics) in the excluded app layer and hands it, still apart from the computed union, to ChargeBaselines.resolve (#2525); this disposition does not assert behavioral parity.",
       "twin_path": "Strand/Data/Repository.swift"
+    },
+    {
+      "type": "platform_specific",
+      "kind": "add-unpaired-function",
+      "identity": "kotlin\u0000android/app/src/main/java/com/noop/data/OuraDashboardData.kt::add/2#1",
+      "identity_sha256": "3bc75b50c8043e798230b434ea41fe3b6e8f4e4500e306d155c3ea3a3f723af1",
+      "platform": "kotlin",
+      "rationale": "Android Oura dashboard projection helper that appends an already computed host-motion summary to its Compose history signal map. It performs no decoder or summary arithmetic; the portable summary values and aggregation have Swift/Kotlin twins."
+    },
+    {
+      "type": "platform_specific",
+      "kind": "add-unpaired-function",
+      "identity": "kotlin\u0000android/app/src/main/java/com/noop/data/OuraLiveMotionHistory.kt::max/1#1",
+      "identity_sha256": "a7c8011d0eb44730b779c582a41a54ec6508fc8523a6d51ff7bf2983c136776e",
+      "platform": "kotlin",
+      "rationale": "Android Oura dashboard inspection adapter exposing the portable raw motion summary to Compose. This accessor delegates to the shared-contract summary or reads its canonical fields; Swift storage consumes the summary directly without this Android UI adapter."
+    },
+    {
+      "type": "platform_specific",
+      "kind": "add-unpaired-function",
+      "identity": "kotlin\u0000android/app/src/main/java/com/noop/data/OuraLiveMotionHistory.kt::mean/1#1",
+      "identity_sha256": "f382f5043bddc93f7676c4789dd67dce88733adb7015b501f10175e70dcb036d",
+      "platform": "kotlin",
+      "rationale": "Android Oura dashboard inspection adapter exposing the portable raw motion summary to Compose. This accessor delegates to the shared-contract summary or reads its canonical fields; Swift storage consumes the summary directly without this Android UI adapter."
+    },
+    {
+      "type": "platform_specific",
+      "kind": "add-unpaired-function",
+      "identity": "kotlin\u0000android/app/src/main/java/com/noop/data/OuraLiveMotionHistory.kt::min/1#1",
+      "identity_sha256": "8095277effcb4563ad3742a59445b2cabd5d149a1f8ac77e256957fa4449cef7",
+      "platform": "kotlin",
+      "rationale": "Android Oura dashboard inspection adapter exposing the portable raw motion summary to Compose. This accessor delegates to the shared-contract summary or reads its canonical fields; Swift storage consumes the summary directly without this Android UI adapter."
+    },
+    {
+      "type": "platform_specific",
+      "kind": "add-unpaired-property",
+      "identity": "kotlin\u0000android/app/src/main/java/com/noop/data/OuraLiveMotionHistory.kt::count@property#1",
+      "identity_sha256": "87fb98bd1678ed673c35f0a4b24a3ab525c99a82e5fb8f79edbacf9e7e2f2733",
+      "platform": "kotlin",
+      "rationale": "Android Oura dashboard inspection adapter exposing existing canonical host-motion summary fields to Compose. The stored payload, provenance, arithmetic and parsing have Swift twins; this Android-only UI wrapper is not a separate stored representation."
+    },
+    {
+      "type": "platform_specific",
+      "kind": "add-unpaired-property",
+      "identity": "kotlin\u0000android/app/src/main/java/com/noop/data/OuraLiveMotionHistory.kt::firstReceiptEpochMs@property#1",
+      "identity_sha256": "681f394200b0042a413ecb34c8ee7c253eeb034ff8c892a6a793b47ec7b60bee",
+      "platform": "kotlin",
+      "rationale": "Android Oura dashboard inspection adapter exposing existing canonical host-motion summary fields to Compose. The stored payload, provenance, arithmetic and parsing have Swift twins; this Android-only UI wrapper is not a separate stored representation."
+    },
+    {
+      "type": "platform_specific",
+      "kind": "add-unpaired-property",
+      "identity": "kotlin\u0000android/app/src/main/java/com/noop/data/OuraLiveMotionHistory.kt::lastReceiptEpochMs@property#1",
+      "identity_sha256": "f72f7197996381a0f6f7ddc7472a77f34e5cd5d106e7495f34ad2cb93f26ee59",
+      "platform": "kotlin",
+      "rationale": "Android Oura dashboard inspection adapter exposing existing canonical host-motion summary fields to Compose. The stored payload, provenance, arithmetic and parsing have Swift twins; this Android-only UI wrapper is not a separate stored representation."
+    },
+    {
+      "type": "platform_specific",
+      "kind": "add-unpaired-property",
+      "identity": "kotlin\u0000android/app/src/main/java/com/noop/data/OuraLiveMotionHistory.kt::provenance@property#1",
+      "identity_sha256": "be98c3b8e12bafb3d805be2cf0411ec9516786de3f2e057e0da3937632c1ab46",
+      "platform": "kotlin",
+      "rationale": "Android Oura dashboard inspection adapter exposing existing canonical host-motion summary fields to Compose. The stored payload, provenance, arithmetic and parsing have Swift twins; this Android-only UI wrapper is not a separate stored representation."
+    },
+    {
+      "type": "platform_specific",
+      "kind": "add-unpaired-function",
+      "identity": "kotlin\u0000android/app/src/main/java/com/noop/data/WhoopDao.kt::eventAt/3#1",
+      "identity_sha256": "1d19afa2e2074c30813c1d449d57cc6a336d45dcaad21cb9faf2020c563af4f9",
+      "platform": "kotlin",
+      "rationale": "Android Room DAO operation used inside the live-motion merge transaction. Swift GRDB executes the corresponding select/upsert inside StreamStore.insert rather than exposing Room annotation-driven DAO methods; stored merge behavior is covered by reciprocal persistence tests."
+    },
+    {
+      "type": "platform_specific",
+      "kind": "add-unpaired-function",
+      "identity": "kotlin\u0000android/app/src/main/java/com/noop/data/WhoopDao.kt::replaceEvent/1#1",
+      "identity_sha256": "72f18a0b8c2a501220df6ff46eaa29e8faf1c4a8e98a4c85c94f91a44f89afd0",
+      "platform": "kotlin",
+      "rationale": "Android Room DAO operation used inside the live-motion merge transaction. Swift GRDB executes the corresponding select/upsert inside StreamStore.insert rather than exposing Room annotation-driven DAO methods; stored merge behavior is covered by reciprocal persistence tests."
+    },
+    {
+      "type": "platform_specific",
+      "kind": "add-unpaired-function",
+      "identity": "kotlin\u0000android/app/src/main/java/com/noop/data/WhoopDao.kt::mergeLiveMotion/1#1",
+      "identity_sha256": "f18bcefc8b11c1d7f25472faad1b8e48e8a6b44c54cca5565c9cdc57269af223",
+      "platform": "kotlin",
+      "rationale": "Android Room transaction adapter around the portable live-motion summary merge. Swift GRDB performs the same read/merge/upsert inline in StreamStore.insert; this separate DAO entry point is required by Android Room integration, not a one-sided summary formula."
+    },
+    {
+      "type": "platform_specific",
+      "kind": "add-unpaired-constant",
+      "identity": "swift\u0000Packages/OuraProtocol/Sources/OuraProtocol/OuraLiveMotionSummary.swift::fieldPattern",
+      "identity_sha256": "72f46b00f62bf901ecff12974f7cccbe4cc45b058eb0a133aaafbaefc74af1ed",
+      "platform": "swift",
+      "rationale": "Swift static let caches a compiled regular expression; its Kotlin twin is the immutable companion val OuraLiveMotionHistory.fieldPattern. Kotlin cannot declare this object as const val, the only Kotlin constant form the inventory recognizes. Reciprocal payload and boundary oracle tests verify the actual shared contract."
+    },
+    {
+      "type": "platform_specific",
+      "kind": "add-unpaired-constant",
+      "identity": "swift\u0000Packages/OuraProtocol/Sources/OuraProtocol/OuraLiveMotionSummary.swift::payloadShape",
+      "identity_sha256": "82d77119ee015b12a3b773a3e062bfd5a78cc3966af299e7467dab0bd177f006",
+      "platform": "swift",
+      "rationale": "Swift static let caches a compiled regular expression; its Kotlin twin is the immutable companion val OuraLiveMotionHistory.payloadShape. Kotlin cannot declare this object as const val, the only Kotlin constant form the inventory recognizes. Reciprocal payload and boundary oracle tests verify the actual shared contract."
+    },
+    {
+      "type": "platform_specific",
+      "kind": "add-unpaired-constant",
+      "identity": "swift\u0000Packages/OuraProtocol/Sources/OuraProtocol/OuraLiveMotionSummary.swift::numericKeys",
+      "identity_sha256": "8ec4c6a066d8764b5f5662e0ae5f59fbf290a83a3801cb77fd1a6de23cf1c6ed",
+      "platform": "swift",
+      "rationale": "Swift static let caches a computed set of required field names; its Kotlin twin is the immutable companion val OuraLiveMotionSummary.numericKeys. Kotlin cannot declare this object as const val, the only Kotlin constant form the inventory recognizes. Reciprocal payload and boundary oracle tests verify the actual shared contract."
     }
   ]
 }
