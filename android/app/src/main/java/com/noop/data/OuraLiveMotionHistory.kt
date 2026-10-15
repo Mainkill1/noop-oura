@@ -13,13 +13,13 @@ data class OuraLiveMotionHistory(val ts: Long, val summary: OuraLiveMotionSummar
     fun min(axis: String): Long = summary.values.getValue("min_$axis")
     fun max(axis: String): Long = summary.values.getValue("max_$axis")
     companion object {
-        // Swift twin: `OuraLiveMotionSummary.field`.
-        private val field = """"([a-z_]+)"[ \t\r\n]*:[ \t\r\n]*("(?:host_receipt|raw_signed16)"|-?(?:0|[1-9][0-9]*))"""
-        // Swift twin: `OuraLiveMotionSummary.space`.
-        private val space = """[ \t\r\n]*"""
-        // Swift twin: `OuraLiveMotionSummary.fieldPattern`.
+        // Corresponding Swift property: `OuraLiveMotionSummary.field`.
+        private const val field = "\"([a-z_]+)\"[ \\t\\r\\n]*:[ \\t\\r\\n]*(\"(?:host_receipt|raw_signed16)\"|-?(?:0|[1-9][0-9]*))"
+        // Corresponding Swift property: `OuraLiveMotionSummary.space`.
+        private const val space = "[ \\t\\r\\n]*"
+        // Corresponding Swift property: `OuraLiveMotionSummary.fieldPattern`.
         private val fieldPattern = Regex(field)
-        // Swift twin: `OuraLiveMotionSummary.payloadShape`.
+        // Corresponding Swift property: `OuraLiveMotionSummary.payloadShape`.
         private val payloadShape = Regex(space + "\\{" + space + field + space + "(?:," + space + field + space + ")*\\}" + space)
         // Swift twin: `OuraLiveMotionSummary.parse`.
         fun parse(ts: Long, payload: String): OuraLiveMotionHistory? = runCatching {

@@ -73,8 +73,8 @@ internal fun OuraSignalCard(
         }
     }
 
-    NoopCard(modifier = modifier) {
-        Column(verticalArrangement = Arrangement.spacedBy(Metrics.space12)) {
+    OuraPanel(modifier = modifier) {
+        Column(verticalArrangement = Arrangement.spacedBy(Metrics.space8)) {
             Text(title, style = NoopType.subhead, color = Palette.textPrimary)
             if (note.isNotEmpty()) Text(note, style = NoopType.caption, color = Palette.textSecondary)
             if (summary.count == 0) {

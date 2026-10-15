@@ -22,8 +22,8 @@ internal fun OuraMovementDetails(records: List<OuraMotionWindow>) {
     var selectedTs by rememberSaveable { mutableStateOf<Long?>(null) }
     val index = records.indexOfFirst { it.ts == selectedTs }.coerceAtLeast(0)
     val record = records.getOrNull(index)
-    NoopCard {
-        Column(verticalArrangement = Arrangement.spacedBy(Metrics.space12)) {
+    OuraPanel {
+        Column(verticalArrangement = Arrangement.spacedBy(Metrics.space8)) {
             Text(stringResource(R.string.oura_motion_details), style = NoopType.headline, color = Palette.textPrimary)
             Text(stringResource(R.string.oura_motion_info), style = NoopType.caption, color = Palette.textSecondary)
             if (record == null) Text(stringResource(R.string.oura_no_readings), style = NoopType.body, color = Palette.textSecondary)
@@ -43,7 +43,7 @@ internal fun OuraMovementDetails(records: List<OuraMotionWindow>) {
                     R.string.oura_motion_low to record.low, R.string.oura_motion_high to record.high,
                     R.string.oura_motion_orientation to record.orientation?.toDouble())
                 entries.forEach { (label, value) ->
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Metrics.space12)) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Metrics.space8)) {
                         Text(stringResource(label), Modifier.weight(1f), style = NoopType.caption, color = Palette.textSecondary)
                         Text(value?.let { String.format(Locale.getDefault(), "%.0f", it) } ?: "—",
                             style = NoopType.bodyNumber, color = Palette.textPrimary)

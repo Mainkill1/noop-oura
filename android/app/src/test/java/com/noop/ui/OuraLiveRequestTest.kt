@@ -51,4 +51,84 @@ class OuraLiveRequestTest {
         owner.start(initial.copy(generation = 88888), OuraLiveSelection(hr = true))
         assertEquals(88888L, intents.last().generation)
     }
+
+    @Test fun visibleEntryWaitsForAuthenticationThenStartsOnceWithoutSampleRetries() {
+        val intents = mutableListOf<OuraLiveIntent>()
+        val owner = OuraLiveOwner(intents::add)
+        val snapshot = OuraLiveSessionSnapshot(sourceDeviceId = "ring", generation = 10)
+        val demand = OuraLiveSelection(hr = true)
+        owner.present(snapshot, "ring", true, false, demand)
+        assertTrue(intents.isEmpty())
+        owner.present(snapshot, "ring", true, true, demand)
+        repeat(200) { owner.present(snapshot.copy(active = true, generation = 11), "ring", true, true, demand) }
+        assertEquals(listOf(OuraLiveAction.Start), intents.map { it.action })
+        owner.present(snapshot, "ring", true, true, OuraLiveSelection(motion = true))
+        assertEquals(OuraLiveAction.Update, intents.last().action)
+        owner.present(snapshot, "ring", false, true, demand)
+        assertEquals(OuraLiveAction.Stop, intents.last().action)
+        assertEquals(10, intents.last().generation)
+    }
+
+    @Test fun reconnectAndReentryRegainOnlyCurrentDemandAndSourceSwitchStopsAlias() {
+        val intents = mutableListOf<OuraLiveIntent>()
+        val owner = OuraLiveOwner(intents::add)
+        val a = OuraLiveSessionSnapshot(sourceDeviceId = "a", generation = 100)
+        val xyz = OuraLiveSelection(motion = true)
+        owner.present(a, "a", true, true, xyz)
+        owner.present(a, "a", true, false, xyz)
+        owner.present(a.copy(generation = 200), "a", true, true, xyz)
+        owner.present(a, "b", true, true, xyz)
+        assertEquals(listOf(OuraLiveAction.Start, OuraLiveAction.Stop, OuraLiveAction.Start, OuraLiveAction.Stop), intents.map { it.action })
+        owner.present(a.copy(sourceDeviceId = "b", generation = 300), "b", true, true, xyz)
+        owner.present(a.copy(sourceDeviceId = "b", generation = 301), "b", true, true, OuraLiveSelection())
+        assertEquals(OuraLiveAction.Stop, intents.last().action)
+        owner.present(a.copy(sourceDeviceId = "b", generation = 302), "b", true, true, xyz)
+        assertEquals(302, intents.last().generation)
+        assertEquals(xyz, intents.last().selection)
+    }
+
+    @Test fun failedFirstSamplesAndInactiveGenerationDoNotRetryUntilNewEntry() {
+        val intents = mutableListOf<OuraLiveIntent>()
+        val owner = OuraLiveOwner(intents::add)
+        val snapshot = OuraLiveSessionSnapshot(sourceDeviceId = "a", generation = 42)
+        owner.present(snapshot, "a", true, true, OuraLiveSelection(hr = true))
+        repeat(200) { owner.present(snapshot.copy(generation = 99), "a", true, true, OuraLiveSelection(hr = true)) }
+        assertEquals(1, intents.size)
+        owner.hide()
+        owner.present(snapshot.copy(generation = 99), "a", true, true, OuraLiveSelection(hr = true))
+        assertEquals(2, intents.size)
+        assertEquals(99L, intents.last().generation)
+    }
+
+    @Test fun rapidReentryWaitsForPriorOffThenStartsOnceAndIgnoresStaleSource() {
+        val intents = mutableListOf<OuraLiveIntent>()
+        val owner = OuraLiveOwner(intents::add)
+        val snapshot = OuraLiveSessionSnapshot(sourceDeviceId = "a", generation = 10)
+        val hr = OuraLiveSelection(hr = true)
+        owner.present(snapshot, "a", true, true, hr)
+        owner.present(snapshot.copy(active = true, generation = 11), "a", true, true, hr)
+        owner.hide()
+        owner.present(snapshot.copy(active = true, generation = 11), "a", true, true, hr)
+        assertEquals(2, intents.size)
+        owner.present(snapshot.copy(generation = 12), "a", true, true, hr)
+        assertEquals(OuraLiveIntent(OuraLiveAction.Start, "a", 12, hr), intents.last())
+        owner.present(snapshot, "b", true, true, hr)
+        owner.present(snapshot.copy(sourceDeviceId = "b", generation = 20), "b", true, true, hr)
+        assertEquals(OuraLiveIntent(OuraLiveAction.Start, "b", 20, hr), intents.last())
+    }
+
+    @Test fun rapidPendingStartReentryWaitsForStopGenerationAcknowledgement() {
+        val intents = mutableListOf<OuraLiveIntent>()
+        val owner = OuraLiveOwner(intents::add)
+        val pending = OuraLiveSessionSnapshot(sourceDeviceId = "a", generation = 100)
+        val hr = OuraLiveSelection(hr = true)
+        owner.present(pending, "a", true, true, hr)
+        owner.hide()
+        owner.present(pending, "a", true, true, hr)
+        assertEquals(listOf(OuraLiveAction.Start, OuraLiveAction.Stop), intents.map { it.action })
+        owner.present(pending.copy(generation = 102), "a", true, true, hr)
+        assertEquals(OuraLiveIntent(OuraLiveAction.Start, "a", 102, hr), intents.last())
+        repeat(100) { owner.present(pending.copy(generation = 102), "a", true, true, hr) }
+        assertEquals(3, intents.size)
+    }
 }

@@ -75,15 +75,15 @@ public struct OuraLiveMotionSummary: Equatable, Sendable {
         guard summary.ts == ts else { throw InvalidPayload.invalid }
         return summary
     }
-    // Kotlin twin: `OuraLiveMotionHistory.field`.
-    private static let field = #""([a-z_]+)"[ \t\r\n]*:[ \t\r\n]*("(?:host_receipt|raw_signed16)"|-?(?:0|[1-9][0-9]*))"#
-    // Kotlin twin: `OuraLiveMotionHistory.space`.
-    private static let space = #"[ \t\r\n]*"#
-    // Kotlin twin: `OuraLiveMotionHistory.fieldPattern`.
+    // Corresponding Kotlin property: `OuraLiveMotionHistory.field`.
+    private static let field = "\"([a-z_]+)\"[ \\t\\r\\n]*:[ \\t\\r\\n]*(\"(?:host_receipt|raw_signed16)\"|-?(?:0|[1-9][0-9]*))"
+    // Corresponding Kotlin property: `OuraLiveMotionHistory.space`.
+    private static let space = "[ \\t\\r\\n]*"
+    // Corresponding Kotlin property: `OuraLiveMotionHistory.fieldPattern`.
     private static let fieldPattern = try! NSRegularExpression(pattern: field)
-    // Kotlin twin: `OuraLiveMotionHistory.payloadShape`.
+    // Corresponding Kotlin property: `OuraLiveMotionHistory.payloadShape`.
     private static let payloadShape = try! NSRegularExpression(pattern: "^" + space + #"\{"# + space + field + space + "(?:," + space + field + space + #")*\}"# + space + "$")
-    // Kotlin twin: `OuraLiveMotionSummary.numericKeys`.
+    // Corresponding Kotlin property: `OuraLiveMotionSummary.numericKeys`.
     private static let numericKeys = Set(["count", "first_receipt_ms", "last_receipt_ms"] +
         ["x", "y", "z"].flatMap { axis in ["sum_\(axis)", "min_\(axis)", "max_\(axis)"] })
     // Kotlin twin: `OuraLiveMotionSummary.validate`.

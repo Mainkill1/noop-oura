@@ -25,35 +25,42 @@ import org.junit.Test
 class OuraLiveDeviceTest {
     @get:Rule val compose = createComposeRule()
 
-    @Test fun explicitStartStopAndAxisVisibilityDoNotCreateSubscriptions() {
+    @Test fun automaticPageEntryAndAxisVisibilityUseOnlyOneMotionSubscription() {
         var snapshot by mutableStateOf(OuraLiveSessionSnapshot(sourceDeviceId = "synthetic", generation = 999999))
-        var starts = 0
-        var stops = 0
-        var selections = 0
+        val intents = mutableListOf<OuraLiveIntent>()
+        val owner = OuraLiveOwner { intent ->
+            intents.add(intent)
+            if (intent.action == OuraLiveAction.Start) snapshot = populated().copy(selection = intent.selection)
+        }
+        val lifecycleOwner = testLifecycleOwner()
+        compose.runOnIdle { lifecycleOwner.registry.currentState = Lifecycle.State.RESUMED }
         compose.setContent { Frame {
+            OuraLiveLifecycle(owner, lifecycleOwner.lifecycle, "synthetic", true, snapshot, true, OuraLiveSelection(motion = true))
             OuraLivePanel(snapshot, 60000, OuraCategory.Movement, setOf("x", "y", "z"), true, true,
-                OuraHistorySyncPhase.IDLE,
-                onStart = { starts++; snapshot = populated().copy(selection = OuraLiveSelection(motion = true)) },
-                onStop = { stops++; snapshot = snapshot.copy(active = false) },
-                onComparison = { selections++ }, onHistory = {})
+                OuraHistorySyncPhase.IDLE, {}, {})
         } }
-        compose.runOnIdle { assertEquals(0, starts) }
-        compose.onNodeWithText("Start live").performScrollTo().performClick()
-        compose.onNodeWithText("Stop live").assertExists()
+        compose.onNodeWithText("Start live").assertDoesNotExist()
         compose.onNodeWithTag("oura-live-trace-x").performScrollTo().performClick()
         compose.onNodeWithTag("oura-live-trace-y").performScrollTo().performClick()
-        compose.runOnIdle { assertEquals(1, starts); assertEquals(0, selections) }
-        compose.onNodeWithText("Stop live").performScrollTo().performClick()
-        compose.runOnIdle { assertEquals(1, stops) }
-        compose.onNodeWithTag("oura-live-session").assertTextEquals("Live stopped")
+        compose.runOnIdle { assertEquals(listOf(OuraLiveAction.Start), intents.map { it.action }) }
+        compose.onNodeWithTag("oura-live-trace-x").performScrollTo().performClick()
+        compose.onNodeWithTag("oura-live-trace-y").performScrollTo().performClick()
         compose.onNodeWithTag("oura-live-plot").performScrollTo().assertIsDisplayed()
-        capture("live-stopped-motion")
+        capture("live-motion-raw-synthetic")
+        compose.onNodeWithText("Smoothed").performScrollTo().performClick().assertIsSelected()
+        compose.onNodeWithTag("oura-live-plot").performScrollTo()
+        capture("live-motion-smoothed-synthetic")
+        compose.runOnIdle {
+            lifecycleOwner.registry.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
+            assertEquals(listOf(OuraLiveAction.Start, OuraLiveAction.Stop), intents.map { it.action })
+            assertEquals(999999L, intents.last().generation)
+        }
     }
 
     @Test fun comparisonInspectShowsRawMixedUnitsAndBothVectorsAtOneReceipt() {
         compose.setContent { Frame {
             OuraLivePanel(populated(), 60000, OuraCategory.Compare, setOf("hr", "x", "y", "z"), true, true,
-                OuraHistorySyncPhase.PAUSED_FOR_LIVE, {}, {}, {}, {})
+                OuraHistorySyncPhase.PAUSED_FOR_LIVE, {}, {})
         } }
         val plot = compose.onNodeWithTag("oura-live-plot").performScrollTo()
         plot.performTouchInput { click(percentOffset(29f / 30f, .5f)) }
@@ -71,7 +78,7 @@ class OuraLiveDeviceTest {
                 OuraLiveStreamPhase.STALE, 57600))
         compose.setContent { Frame {
             OuraLivePanel(snapshot, 60000, OuraCategory.Compare, setOf("hr", "x"), true, true,
-                OuraHistorySyncPhase.PAUSED_FOR_LIVE, {}, {}, {}, {})
+                OuraHistorySyncPhase.PAUSED_FOR_LIVE, {}, {})
         } }
         val plot = compose.onNodeWithTag("oura-live-plot").performScrollTo()
         plot.performTouchInput { click(percentOffset(25f / 30f, .5f)) }
@@ -95,7 +102,7 @@ class OuraLiveDeviceTest {
             motion = OuraLiveStream(phase = OuraLiveStreamPhase.WAITING))
         compose.setContent { Frame {
             OuraLivePanel(snapshot, 60000, OuraCategory.Compare, setOf("hr", "x"), true, true,
-                OuraHistorySyncPhase.SYNCING, {}, {}, {}, {})
+                OuraHistorySyncPhase.SYNCING, {}, {})
         } }
         compose.onNodeWithText("Heart rate · Receiving samples").performScrollTo().assertExists()
         compose.onNodeWithText("Updated 1 second ago").assertExists()
@@ -107,10 +114,10 @@ class OuraLiveDeviceTest {
         compose.setContent {
             CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, 2f)) { Frame {
                 OuraLivePanel(populated(), 60000, OuraCategory.Compare, setOf("hr", "x", "y", "z"), true, true,
-                    OuraHistorySyncPhase.PAUSED_FOR_LIVE, {}, {}, {}, {})
+                    OuraHistorySyncPhase.PAUSED_FOR_LIVE, {}, {})
             } }
         }
-        compose.onNodeWithText("Stop live").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Stop live").assertDoesNotExist()
         compose.onNodeWithTag("oura-live-trace-z").performScrollTo().assertIsDisplayed()
         // A large-font pill scrolls horizontally; first bring its ROW through the vertical viewport.
         compose.onNodeWithTag("oura-live-window").performScrollTo().assertIsDisplayed()
@@ -120,48 +127,53 @@ class OuraLiveDeviceTest {
         capture("live-large-font-synthetic")
     }
 
-    @Test fun recreationRetainsOnlyPresentationChoicesAndNeverStartsSession() {
+    @Test fun recreationRetainsOnlyPresentationChoices() {
         val restoration = StateRestorationTester(compose)
-        var starts = 0
         restoration.setContent { Frame {
             OuraLivePanel(OuraLiveSessionSnapshot(sourceDeviceId = "synthetic", generation = 44444), 60000,
                 OuraCategory.Health, setOf("hr"), true, true, OuraHistorySyncPhase.IDLE,
-                { starts++ }, {}, {}, {})
+                {}, {})
         } }
         compose.onNodeWithText("10 s").performScrollTo().performClick()
         compose.onNodeWithText("Smoothed").performScrollTo().performClick()
         restoration.emulateSavedInstanceStateRestore()
         compose.onNodeWithText("10 s").performScrollTo().assertIsSelected()
         compose.onNodeWithText("Smoothed").performScrollTo().assertIsSelected()
-        compose.onNodeWithText("Start live").performScrollTo().assertIsDisplayed()
-        compose.runOnIdle { assertEquals(0, starts) }
+        compose.onNodeWithText("Start live").assertDoesNotExist()
         capture("live-empty-synthetic")
     }
 
-    @Test fun productionLifecycleCancelsPendingStartAndNeverResumesIt() {
+    private class TestLifecycleOwner : LifecycleOwner {
+        val registry = LifecycleRegistry(this)
+        override val lifecycle: Lifecycle get() = registry
+    }
+    private fun testLifecycleOwner() = TestLifecycleOwner()
+
+    @Test fun productionLifecycleStopsOnPauseBeforeStopAndResumesCurrentDemand() {
         val intents = mutableListOf<OuraLiveIntent>()
         val owner = OuraLiveOwner(intents::add)
-        val lifecycleOwner = object : LifecycleOwner {
-            val registry = LifecycleRegistry(this)
-            override val lifecycle: Lifecycle get() = registry
-        }
+        val life = testLifecycleOwner()
         var present by mutableStateOf(true)
-        compose.runOnIdle { lifecycleOwner.registry.currentState = Lifecycle.State.RESUMED }
-        compose.setContent { if (present) OuraLiveLifecycle(owner, lifecycleOwner.lifecycle, "synthetic", true) }
+        var selection by mutableStateOf(OuraLiveSelection(hr = true))
+        var snapshot by mutableStateOf(OuraLiveSessionSnapshot(sourceDeviceId = "synthetic", generation = 919191))
+        compose.runOnIdle { life.registry.currentState = Lifecycle.State.RESUMED }
+        compose.setContent { if (present) OuraLiveLifecycle(owner, life.lifecycle, "synthetic", true,
+            snapshot, true, selection) }
         compose.runOnIdle {
-            owner.start(OuraLiveSessionSnapshot(sourceDeviceId = "synthetic", generation = 919191), OuraLiveSelection(hr = true))
-            lifecycleOwner.registry.currentState = Lifecycle.State.CREATED
+            assertEquals(listOf(OuraLiveAction.Start), intents.map { it.action })
+            life.registry.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
             assertEquals(listOf(OuraLiveAction.Start, OuraLiveAction.Stop), intents.map { it.action })
-            assertEquals(919191L, intents.last().generation)
-            lifecycleOwner.registry.currentState = Lifecycle.State.RESUMED
-            assertEquals(2, intents.size)
-            owner.start(OuraLiveSessionSnapshot(sourceDeviceId = "synthetic", generation = 828282), OuraLiveSelection(motion = true))
+            assertEquals(Lifecycle.State.STARTED, life.lifecycle.currentState)
+            selection = OuraLiveSelection(motion = true)
+            snapshot = snapshot.copy(generation = 919193)
+        }
+        compose.runOnIdle { life.registry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME) }
+        compose.runOnIdle {
+            assertEquals(OuraLiveSelection(motion = true), intents.last().selection)
+            assertEquals(3, intents.size)
             present = false
         }
-        compose.runOnIdle {
-            assertEquals(listOf(OuraLiveAction.Start, OuraLiveAction.Stop, OuraLiveAction.Start, OuraLiveAction.Stop), intents.map { it.action })
-            assertEquals(828282L, intents.last().generation)
-        }
+        compose.runOnIdle { assertEquals(listOf(OuraLiveAction.Start, OuraLiveAction.Stop, OuraLiveAction.Start, OuraLiveAction.Stop), intents.map { it.action }) }
     }
 
     private fun populated(): OuraLiveSessionSnapshot {

@@ -33,19 +33,22 @@ private data class OuraLiveTrace(val key: String, val label: String, val unit: S
 @Composable
 internal fun OuraLivePanel(snapshot: OuraLiveSessionSnapshot, nowElapsedMs: Long, category: OuraCategory,
     comparison: Set<String>, eligible: Boolean, connected: Boolean, historyPhase: OuraHistorySyncPhase,
-    onStart: () -> Unit, onStop: () -> Unit, onComparison: (Set<String>) -> Unit, onHistory: () -> Unit,
+    onComparison: (Set<String>) -> Unit, onHistory: () -> Unit,
     pendingStart: Boolean = false) {
     var windowSeconds by rememberSaveable { mutableIntStateOf(30) }
     var smoothed by rememberSaveable { mutableStateOf(false) }
     var axesCsv by rememberSaveable { mutableStateOf("x,y,z") }
     val axes = axesCsv.split(',').filter { it.isNotEmpty() }.toSet()
-    val desired = ouraLiveSelection(category, comparison)
+
     val hrRaw = remember(snapshot.hr.samples) { snapshot.hr.samples.map { OuraLivePoint(it.receivedAtElapsedMs, it.bpm.toDouble()) } }
     val hrTrend = remember(hrRaw, smoothed) { if (smoothed) ouraLiveHrTrend(hrRaw) else hrRaw }
     val motionRaw = remember(snapshot.motion.samples) {
         listOf("x", "y", "z").associateWith { key -> snapshot.motion.samples.map { sample ->
             OuraLivePoint(sample.receivedAtElapsedMs, when (key) { "x" -> sample.x; "y" -> sample.y; else -> sample.z }.toDouble())
         } }
+    }
+    val motionDisplay = remember(motionRaw, smoothed) {
+        motionRaw.mapValues { (_, raw) -> if (smoothed) ouraLiveMotionTrend(raw) else raw }
     }
     var motionExtent by remember(snapshot.sourceDeviceId, snapshot.startedAtElapsedMs) { mutableDoubleStateOf(1024.0) }
     val observedExtent = remember(motionRaw) { motionRaw.values.flatten().maxOfOrNull { abs(it.value) } ?: 0.0 }
@@ -63,13 +66,13 @@ internal fun OuraLivePanel(snapshot: OuraLiveSessionSnapshot, nowElapsedMs: Long
         val label = stringResource(when (key) { "hr" -> R.string.oura_hr; "x" -> R.string.oura_motion_x; "y" -> R.string.oura_motion_y; else -> R.string.oura_motion_z })
         if (key == "hr") OuraLiveTrace(key, label, "bpm", colors[index], hrRaw, hrTrend, 5000,
             minOf(40.0, hrRaw.minOfOrNull { it.value } ?: 40.0), maxOf(120.0, hrRaw.maxOfOrNull { it.value } ?: 120.0))
-        else OuraLiveTrace(key, label, rawUnit, colors[index], motionRaw.getValue(key), motionRaw.getValue(key), 1500, -extent, extent)
+        else OuraLiveTrace(key, label, rawUnit, colors[index], motionRaw.getValue(key), motionDisplay.getValue(key), 1500, -extent, extent)
     }
     val traces = allTraces.filter { it.key in keys }
-    NoopCard {
-        Column(verticalArrangement = Arrangement.spacedBy(Metrics.space12)) {
+    OuraPanel {
+        Column(verticalArrangement = Arrangement.spacedBy(Metrics.space8)) {
             Text(stringResource(when { pendingStart -> R.string.oura_live_starting; snapshot.active -> R.string.oura_live_running; else -> R.string.oura_live_stopped }),
-                style = NoopType.headline, color = Palette.textPrimary, modifier = Modifier.testTag("oura-live-session"))
+                style = NoopType.subhead, color = Palette.textPrimary, modifier = Modifier.testTag("oura-live-session"))
             Text(stringResource(when {
                 !eligible -> R.string.oura_live_requires_ring
                 !connected -> R.string.oura_live_disconnected
@@ -84,24 +87,15 @@ internal fun OuraLivePanel(snapshot: OuraLiveSessionSnapshot, nowElapsedMs: Long
                 Text(stringResource(R.string.oura_sleep_history), style = NoopType.body, color = Palette.textSecondary)
                 NoopButton(stringResource(R.string.oura_history), kind = NoopButtonKind.Secondary, onClick = onHistory)
             } else {
-                if (desired.motion) Text(stringResource(R.string.oura_live_motion_limit), style = NoopType.caption, color = Palette.textSecondary)
-                if (snapshot.active && snapshot.motionDeadlineElapsedMs != null) Text(
-                    pluralStringResource(R.plurals.oura_live_remaining_seconds,
-                        ((snapshot.motionDeadlineElapsedMs - nowElapsedMs).coerceAtLeast(0) / 1000).toInt(),
-                        ((snapshot.motionDeadlineElapsedMs - nowElapsedMs).coerceAtLeast(0) / 1000)),
-                    style = NoopType.captionNumber, color = Palette.textSecondary)
-                NoopButton(stringResource(if (snapshot.active || pendingStart) R.string.oura_live_stop else R.string.oura_live_start),
-                    enabled = snapshot.active || pendingStart || (eligible && connected && (desired.hr || desired.motion)),
-                    modifier = Modifier.testTag("oura-live-start-stop"),
-                    onClick = if (snapshot.active || pendingStart) onStop else onStart)
+                Text(stringResource(R.string.oura_live_page_open), style = NoopType.caption, color = Palette.textTertiary)
                 if (category == OuraCategory.Compare || category == OuraCategory.Movement) {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(Metrics.space8), verticalArrangement = Arrangement.spacedBy(Metrics.space4)) {
                         allTraces.filter { category == OuraCategory.Compare || it.key != "hr" }.forEach { trace ->
                             val selected = trace.key in keys
-                            FilterChip(selected = selected, onClick = {
+                            FilterChip(shape = androidx.compose.foundation.shape.RoundedCornerShape(Metrics.cornerXs), selected = selected, onClick = {
                                 val changed = if (selected) keys - trace.key else keys + trace.key
                                 if (category == OuraCategory.Compare) onComparison(changed) else axesCsv = changed.joinToString(",")
-                            }, label = { Text(trace.label, style = NoopType.caption) }, modifier = Modifier.testTag("oura-live-trace-${trace.key}"))
+                            }, label = { Text(trace.label, style = NoopType.caption) }, modifier = Modifier.heightIn(min = Metrics.space24 * 2).testTag("oura-live-trace-${trace.key}"))
                         }
                     }
                 }
@@ -111,18 +105,18 @@ internal fun OuraLivePanel(snapshot: OuraLiveSessionSnapshot, nowElapsedMs: Long
                 if (category == OuraCategory.Movement || keys.any { it != "hr" } || snapshot.selection.motion) OuraLiveStreamReadout(
                     allTraces[1].copy(label = stringResource(R.string.oura_tab_movement), raw = emptyList()), snapshot.active,
                     connected, snapshot.motion.phase, snapshot.motion.lastReceiptElapsedMs, snapshot.motion.observedRateHz, nowElapsedMs)
-                if ("hr" in keys) {
+                if (keys.isNotEmpty()) {
                     val smoothLabel = stringResource(R.string.oura_live_smoothed)
                     val rawLabel = stringResource(R.string.oura_live_raw)
-                    SegmentedPillControl(items = listOf(false, true), selection = smoothed,
+                    OuraToolbar(items = listOf(false, true), selection = smoothed,
                         label = { if (it) smoothLabel else rawLabel },
-                        onSelect = { smoothed = it }, modifier = Modifier.fillMaxWidth(), adaptsToAvailableWidth = true)
-                    Text(stringResource(R.string.oura_live_trend_info), style = NoopType.caption, color = Palette.textSecondary)
+                        onSelect = { smoothed = it }, modifier = Modifier.fillMaxWidth())
+                    Text(stringResource(R.string.oura_live_smoothing_info), style = NoopType.caption, color = Palette.textSecondary)
                 }
                 val context = androidx.compose.ui.platform.LocalContext.current
-                SegmentedPillControl(items = listOf(10, 30, 60), selection = windowSeconds,
+                OuraToolbar(items = listOf(10, 30, 60), selection = windowSeconds,
                     label = { context.getString(R.string.oura_live_window_seconds, it) }, onSelect = { windowSeconds = it },
-                    modifier = Modifier.fillMaxWidth().testTag("oura-live-window"), adaptsToAvailableWidth = true,
+                    modifier = Modifier.fillMaxWidth().testTag("oura-live-window"),
                     accessibilityLabel = stringResource(R.string.oura_window))
                 traces.groupBy { it.unit }.values.forEach { group ->
                     Text(group.joinToString(" / ") { it.label } + ": " + formatLive(group.first().minimum) + " … " +
@@ -152,7 +146,7 @@ private fun OuraLiveStreamReadout(trace: OuraLiveTrace, active: Boolean, connect
     Column(verticalArrangement = Arrangement.spacedBy(Metrics.space4)) {
         Text(trace.label + " · " + label, style = NoopType.subhead, color = trace.color)
         if (trace.key == "hr") Text(trace.raw.lastOrNull()?.let { formatLive(it.value) + " " + trace.unit } ?: "—",
-            style = NoopType.title2, color = Palette.textPrimary)
+            style = NoopType.chartValueLarge, color = Palette.textPrimary)
         val age = ouraLiveAgeSeconds(receipt, now)
         if (age != null) Text(pluralStringResource(R.plurals.oura_live_received_seconds, age.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(), age),
             style = NoopType.captionNumber, color = Palette.textSecondary, modifier = Modifier.testTag("oura-live-age-${trace.key}"))
@@ -227,7 +221,7 @@ private fun OuraLivePlot(traces: List<OuraLiveTrace>, end: Long, seconds: Int, n
         Text(stringResource(R.string.oura_live_relative_seconds, seconds), style = NoopType.captionNumber, color = Palette.textSecondary)
         Text(stringResource(R.string.oura_live_window_end), style = NoopType.caption, color = Palette.textSecondary)
     }
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(Metrics.space12), verticalArrangement = Arrangement.spacedBy(Metrics.space4)) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(Metrics.space8), verticalArrangement = Arrangement.spacedBy(Metrics.space4)) {
         traces.forEach { trace -> Text(trace.label + (if (trace.key == "hr") " · " else ": " + (trace.raw.lastOrNull()?.let { formatLive(it.value) } ?: "—") + " ") + trace.unit, style = NoopType.captionNumber, color = trace.color) }
     }
     if (cursor != null) {

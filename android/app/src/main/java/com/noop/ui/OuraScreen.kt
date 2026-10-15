@@ -88,7 +88,6 @@ fun OuraScreen(vm: AppViewModel, onDevices: () -> Unit, onImport: () -> Unit, on
         owner.observe(liveSession)
         pendingStart = owner.hasOwnership && !liveSession.active
     }
-    OuraLiveLifecycle(owner, lifecycle, sourceId, isLive)
     // Monotonic display clock never creates or requests samples.
     LaunchedEffect(isLive, lifecycle) {
         if (isLive) lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -96,7 +95,7 @@ fun OuraScreen(vm: AppViewModel, onDevices: () -> Unit, onImport: () -> Unit, on
         }
     }
 
-    LaunchedEffect(windowKey, revision, activeId, activeIsOura, recentDays, lifecycle) {
+    LaunchedEffect(windowKey, revision, activeId, activeIsOura, if (isLive) null else recentDays, lifecycle, isLive, category, historyPhase == com.noop.ble.OuraHistorySyncPhase.IDLE) {
         var selected: OuraDashboardSource? = null
         refreshOuraWindow(lifecycle, false, windowKey, { currentWindow }, prepare = {
             loading = true
@@ -113,7 +112,7 @@ fun OuraScreen(vm: AppViewModel, onDevices: () -> Unit, onImport: () -> Unit, on
             }
             val choice = sources.first { it.id == sourceId }
             selected = choice
-            if (isLive) {
+            if (isLive && category != OuraCategory.Health) {
                 loading = false
                 return@refreshOuraWindow false
             }
@@ -147,6 +146,7 @@ fun OuraScreen(vm: AppViewModel, onDevices: () -> Unit, onImport: () -> Unit, on
 
     val window = loaded?.takeIf { it.key == windowKey && (!isLive || liveEligible) }
     val snapshot = window?.data
+    val displaySignals = remember(snapshot) { ouraRecordedDisplaySignals(snapshot?.signals.orEmpty()) }
     val failed = errorKey == windowKey
     val metricKeys = ouraCategoryKeys(imported, category)
     val allKeys = ouraCategoryKeys(imported, OuraCategory.Compare)
@@ -154,24 +154,32 @@ fun OuraScreen(vm: AppViewModel, onDevices: () -> Unit, onImport: () -> Unit, on
     var liveComparisonCsv by rememberSaveable { mutableStateOf("hr,x,y,z") }
     val liveComparison = liveComparisonCsv.split(',').filter { it in listOf("hr", "x", "y", "z") }.toSet()
     val visibleSession = ouraLiveSnapshotForSource(liveSession, sourceId)
+    OuraLiveLifecycle(owner, lifecycle, sourceId, isLive, liveSession,
+        ready = liveEligible && liveSession.sourceDeviceId == sourceId &&
+            ringLinkPhase == com.noop.ble.OuraLiveSource.LinkPhase.AUTHENTICATED,
+        selection = ouraLiveSelection(category, liveComparison))
     fun changeCategory(next: OuraCategory) {
         category = next
-        if (isLive) owner.update(ouraLiveSelection(next, liveComparison))
     }
     val showBackground = remember { NoopPrefs.showDayCycleBackground(context) }
     val skyBehindCards = remember { NoopPrefs.skyBehindCards(context) }
     LazyScreenScaffold(
-        title = stringResource(R.string.oura_title), subtitle = stringResource(R.string.oura_subtitle),
-        trailing = { IconButton(onClick = onSettings) { Icon(Icons.Filled.Settings, stringResource(R.string.nav_settings)) } },
+        title = null, subtitle = null, rowSpacing = Metrics.space8,
         topBackground = screenBackdropSlot(showBackground, skyBehindCards),
         fullBleedBackground = screenBackdropFullBleed(showBackground, skyBehindCards),
     ) {
+        item(key = "oura-header") {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Text(stringResource(R.string.oura_title), Modifier.weight(1f), style = NoopType.headline, color = Palette.textPrimary)
+                IconButton(onClick = onSettings) { Icon(Icons.Filled.Settings, stringResource(R.string.nav_settings)) }
+            }
+        }
         item(key = "navigation", contentType = "navigation") {
-            OuraExplorerNavigation(mode, category, { if (it != mode) owner.stop(); mode = it }, ::changeCategory)
+            OuraExplorerNavigation(mode, category, { if (it != mode) owner.hide(); mode = it }, ::changeCategory)
         }
         item(key = "controls", contentType = "controls") {
             OuraControls(sources, sourceId, day, days, showRange, loading,
-                onSource = { if (sourceId != it) owner.stop(); sourceId = it }, onDay = { landedSource = sourceId; dayEpoch = it.toEpochDay() },
+                onSource = { if (sourceId != it) owner.hide(); sourceId = it }, onDay = { landedSource = sourceId; dayEpoch = it.toEpochDay() },
                 onDays = { landedSource = sourceId; days = it }, onRanges = { showRange = it },
                 onRefresh = { revision++ }, onDevices = onDevices, onImport = onImport,
                 onKeys = { showKeyTransfer = true }, isLive = isLive)
@@ -181,16 +189,14 @@ fun OuraScreen(vm: AppViewModel, onDevices: () -> Unit, onImport: () -> Unit, on
                 eligible = liveEligible && liveSession.sourceDeviceId == sourceId,
                 connected = ringLinkPhase == com.noop.ble.OuraLiveSource.LinkPhase.AUTHENTICATED,
                 historyPhase = historyPhase,
-                onStart = {
-                    if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED) && liveEligible)
-                        owner.start(liveSession, ouraLiveSelection(category, liveComparison))
-                }, onStop = owner::stop,
                 onComparison = {
                     liveComparisonCsv = it.joinToString(",")
-                    owner.update(ouraLiveSelection(category, it))
-                }, onHistory = { owner.stop(); mode = OuraViewMode.History }, pendingStart = pendingStart)
+                }, onHistory = { owner.hide(); mode = OuraViewMode.History }, pendingStart = pendingStart)
         }
-        if (!isLive && failed) item(key = "error", contentType = "status") {
+        if (isLive && category == OuraCategory.Health && snapshot != null) item(key = "recorded-health") {
+            OuraRecordedHealth(snapshot, tempUnit, onHistory = { owner.hide(); mode = OuraViewMode.History })
+        }
+        if (failed) item(key = "error", contentType = "status") {
             Column(verticalArrangement = Arrangement.spacedBy(Metrics.space8)) {
                 DataPendingNote(stringResource(R.string.oura_title), stringResource(
                     if (snapshot != null) R.string.oura_refresh_error else R.string.oura_load_error))
@@ -198,8 +204,8 @@ fun OuraScreen(vm: AppViewModel, onDevices: () -> Unit, onImport: () -> Unit, on
             }
         }
         if (!isLive && snapshot == null && !failed) item(key = "loading", contentType = "status") {
-            NoopCard {
-                Column(verticalArrangement = Arrangement.spacedBy(Metrics.space12)) {
+            OuraPanel {
+                Column(verticalArrangement = Arrangement.spacedBy(Metrics.space8)) {
                     LinearProgressIndicator(Modifier.fillMaxWidth(), color = Palette.accent)
                     Text(stringResource(R.string.oura_loading), style = NoopType.body, color = Palette.textSecondary)
                 }
@@ -207,7 +213,7 @@ fun OuraScreen(vm: AppViewModel, onDevices: () -> Unit, onImport: () -> Unit, on
         }
         if (!isLive && snapshot != null) {
             if (category == OuraCategory.Compare) item(key = "compare:$sourceId", contentType = "compare") {
-                OuraComparisonCard(allKeys, snapshot.signals, window.from, window.to, imported, tempUnit, comparison,
+                OuraComparisonCard(allKeys, displaySignals, window.from, window.to, imported, tempUnit, comparison,
                     { comparisonCsv = it.joinToString(",") })
             } else {
                 if (metricKeys.isNotEmpty()) item(key = "overview:$category", contentType = "overview") {
@@ -220,7 +226,10 @@ fun OuraScreen(vm: AppViewModel, onDevices: () -> Unit, onImport: () -> Unit, on
                     items(snapshot.sleeps, key = { "sleep:${it.deviceId}:${it.startTs}" }, contentType = { "sleep" }) { OuraSleepCard(it) }
                 }
                 if (category == OuraCategory.Movement && !imported) item(key = "motion-details", contentType = "motion") {
-                    OuraMovementDetails(snapshot.motionWindows)
+                    Column(verticalArrangement = Arrangement.spacedBy(Metrics.space8)) {
+                        OuraLiveMotionDetails(snapshot.liveMotionSeconds)
+                        OuraMovementDetails(snapshot.motionWindows)
+                    }
                 }
                 if (metricKeys.any { (snapshot.signals[it]?.count ?: 0) > 0 }) item(key = "charts-heading", contentType = "heading") {
                     Text(stringResource(R.string.oura_chart_details), style = NoopType.headline, color = Palette.textPrimary)
@@ -228,7 +237,7 @@ fun OuraScreen(vm: AppViewModel, onDevices: () -> Unit, onImport: () -> Unit, on
                 items(metricKeys.filter { (snapshot.signals[it]?.count ?: 0) > 0 }, key = { "signal:$sourceId:$it" }, contentType = { "signal" }) { metric ->
                     val (title, unit, note) = ouraPresentation(metric, imported, tempUnit)
                     val (scale, offset) = ouraValueTransform(metric, tempUnit)
-                    OuraSignalCard(title, unit, note, snapshot.signals.getValue(metric), window.from, window.to, showRange,
+                    OuraSignalCard(title, unit, note, displaySignals.getValue(metric), window.from, window.to, showRange || metric.startsWith("live_motion_"),
                         valueScale = scale, valueOffset = offset)
                 }
             }
@@ -246,23 +255,23 @@ fun OuraScreen(vm: AppViewModel, onDevices: () -> Unit, onImport: () -> Unit, on
 /** Every supported metric stays on the same dashboard; missing observations remain explicitly blank. */
 @Composable
 internal fun OuraStatsOverview(data: OuraDashboardData, metricKeys: List<String>, imported: Boolean, temp: TemperatureUnit,
-    isLive: Boolean = false, now: Long = System.currentTimeMillis() / 1000) {
+    isLive: Boolean = false) {
     val timestamp = rememberOuraTimestampFormatter()
     val columns = if (LocalDensity.current.fontScale >= 1.5f) 1 else 2
-    Column(verticalArrangement = Arrangement.spacedBy(Metrics.space12)) {
-        Text(stringResource(R.string.oura_overview), style = NoopType.headline, color = Palette.textPrimary)
+    Column(verticalArrangement = Arrangement.spacedBy(Metrics.space8)) {
+        Text(stringResource(R.string.oura_overview), style = NoopType.subhead, color = Palette.textPrimary)
         Text(stringResource(if (isLive) R.string.oura_latest_recorded_info else R.string.oura_overview_range), style = NoopType.caption, color = Palette.textSecondary)
         metricKeys.chunked(columns).forEach { metrics ->
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Metrics.space12)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Metrics.space8)) {
                 metrics.forEach { metric ->
                     val (title, unit, note) = ouraPresentation(metric, imported, temp)
                     val summary = data.signals[metric]
                     val (scale, offset) = ouraValueTransform(metric, temp)
-                    val value = (if (isLive) summary?.latestValue?.takeIf { summary.latestTs?.let { ts -> ts in (now - 900)..now } == true } else summary?.mean)?.let { String.format(java.util.Locale.getDefault(), "%.1f", it * scale + offset) }
-                    NoopCard(Modifier.weight(1f)) {
+                    val value = (if (isLive) summary?.latestValue else summary?.mean)?.let { String.format(java.util.Locale.getDefault(), "%.1f", it * scale + offset) }
+                    OuraPanel(Modifier.weight(1f)) {
                         Column(verticalArrangement = Arrangement.spacedBy(Metrics.space8)) {
                             Text(title, style = NoopType.subhead, color = Palette.textSecondary)
-                            Text(value ?: "—", style = NoopType.title2,
+                            Text(value ?: "—", style = NoopType.chartValueLarge,
                                 color = if (value != null) Palette.textPrimary else Palette.textTertiary)
                             Text(unit, style = NoopType.captionNumber, color = Palette.textSecondary)
                             if (value != null) {
@@ -291,6 +300,10 @@ internal fun ouraValueTransform(metric: String, temp: TemperatureUnit): Pair<Dou
 @Composable
 internal fun ouraPresentation(key: String, imported: Boolean, temp: TemperatureUnit): Triple<String, String, String> {
     val title = when (key) {
+        "live_motion_x" -> R.string.oura_host_x; "live_motion_y" -> R.string.oura_host_y; "live_motion_z" -> R.string.oura_host_z
+        "live_motion_x_min", "live_motion_y_min", "live_motion_z_min" -> R.string.oura_host_min
+        "live_motion_x_max", "live_motion_y_max", "live_motion_z_max" -> R.string.oura_host_max
+        "live_motion_count" -> R.string.oura_host_count
         "hr" -> R.string.oura_hr; "oxygen" -> R.string.oura_oxygen; "temperature" -> R.string.oura_temperature
         "hrv" -> R.string.oura_hrv; "breathing" -> R.string.oura_breathing; "movement" -> R.string.oura_movement
         "motion_x" -> R.string.oura_motion_x; "motion_y" -> R.string.oura_motion_y; "motion_z" -> R.string.oura_motion_z
@@ -303,7 +316,9 @@ internal fun ouraPresentation(key: String, imported: Boolean, temp: TemperatureU
         "sleep_rem_min" -> R.string.oura_rem; "ref_readiness_score" -> R.string.oura_readiness
         "ref_sleep_score" -> R.string.oura_sleep_score; "ref_activity_score" -> R.string.oura_activity_score; else -> R.string.oura_vo2
     }
-    val unit = when (key) {
+    val unit = when {
+        key.startsWith("live_motion_") -> stringResource(if (key == "live_motion_count") R.string.oura_vectors_unit else R.string.oura_live_raw_counts)
+        else -> when (key) {
         "hr", "rhr" -> "bpm"; "oxygen", "spo2", "battery" -> "%"; "hrv" -> "ms"
         "temperature", "skin_temp_dev_c" -> UnitFormatter.temperatureUnit(temp)
         "breathing", "resp_rate" -> stringResource(R.string.oura_breaths_unit); "movement" -> "s"
@@ -312,7 +327,9 @@ internal fun ouraPresentation(key: String, imported: Boolean, temp: TemperatureU
         "sleep_total_min", "sleep_deep_min", "sleep_rem_min" -> "min"
         "ref_readiness_score", "ref_sleep_score", "ref_activity_score" -> "/100"; else -> "mL/kg/min"
     }
+    }
     val note = when {
+        key.startsWith("live_motion_") -> stringResource(R.string.oura_host_motion_info)
         key == "oxygen" -> stringResource(R.string.oura_oxygen_note)
         key == "hrv" && !imported -> stringResource(R.string.oura_hrv_note)
         key == "breathing" -> stringResource(R.string.oura_breathing_note)

@@ -67,25 +67,6 @@ class OuraExplorerTest {
         assertNull(OuraComparison.bucketAt(buckets, 30))
     }
 
-    @Test fun liveFreshnessRequiresSourceStreamingAndNonfutureRecentObservation() {
-        assertTrue(OuraLivePresentation.isFresh(true, true, true, 100, 120))
-        assertFalse(OuraLivePresentation.isFresh(false, true, true, 100, 120))
-        assertFalse(OuraLivePresentation.isFresh(true, true, false, 100, 120))
-        assertFalse(OuraLivePresentation.isFresh(true, true, true, 89, 120))
-        assertFalse(OuraLivePresentation.isFresh(true, true, true, 121, 120))
-        assertFalse(OuraLivePresentation.isFresh(true, false, true, 100, 120))
-    }
-
-    @Test fun liveBucketsStayAlignedAcrossRefreshes() {
-        val first = OuraLivePresentation.window(1201)
-        val next = OuraLivePresentation.window(1206)
-        assertEquals(0L, first.first % 5)
-        assertEquals(0L, next.first % 5)
-        val samples = listOf(SignalDecimation.Sample(1001, 60.0))
-        assertEquals(SignalDecimation.reduce(samples, first.first, first.second, 5).buckets.single().start,
-            SignalDecimation.reduce(samples, next.first, next.second, 5).buckets.single().start)
-    }
-
     private fun trace(id: String, dimension: String, unit: String, min: Double, max: Double) = OuraComparison.Trace(
         id, dimension, unit, SignalDecimation.reduce(listOf(SignalDecimation.Sample(1, min),
             SignalDecimation.Sample(2, max)), 0, 10, 10))

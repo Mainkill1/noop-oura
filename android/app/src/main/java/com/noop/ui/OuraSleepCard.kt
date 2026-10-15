@@ -51,8 +51,8 @@ internal fun OuraSleepCard(sleep: SleepSession) {
     }
     val totals = parsed?.first
     val format = remember { DateTimeFormatter.ofLocalizedDateTime(FormatStyle.SHORT).withZone(ZoneId.systemDefault()) }
-    NoopCard {
-        Column(verticalArrangement = Arrangement.spacedBy(Metrics.space12)) {
+    OuraPanel {
+        Column(verticalArrangement = Arrangement.spacedBy(Metrics.space8)) {
             Text(format.format(Instant.ofEpochSecond(sleep.effectiveStartTs)) + " – " + format.format(Instant.ofEpochSecond(sleep.endTs)),
                 style = NoopType.captionNumber, color = Palette.textSecondary)
             totals?.let {

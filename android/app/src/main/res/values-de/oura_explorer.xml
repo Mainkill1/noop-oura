@@ -6,7 +6,7 @@
   <string name="oura_live_requires_ring">Live erfordert, dass der ausgewählte Ring das aktive Oura-Gerät ist.</string>
   <string name="oura_live_disconnected">Ring getrennt</string>
   <string name="oura_sleep_history">Schlafsitzungen sind im Verlauf verfügbar.</string>
-  <string name="oura_latest_recorded_info">Zuletzt aufgezeichnete Werte mit Messzeiten. Fehlende Werte haben keine Messung in den letzten 15 Minuten.</string>
+  <string name="oura_latest_recorded_info">Zuletzt aufgezeichnete Werte im gewählten Verlaufszeitraum, mit Beobachtungszeiten.</string>
   <string name="oura_bucket_width_seconds">Medianintervalle: %1$d Sekunden</string>
   <string name="oura_motion_seconds">Bewegungssekunden</string>
   <string name="oura_motion_x">X-Achse</string>
@@ -59,4 +59,22 @@
     <item quantity="one">Cursor: vor %1$d Sekunde</item>
     <item quantity="other">Cursor: vor %1$d Sekunden</item>
   </plurals>
+    <string name="oura_category">Kategorie</string>
+    <string name="oura_expanded">Erweitert</string>
+    <string name="oura_collapsed">Reduziert</string>
+    <string name="oura_live_page_open">Live, solange diese Seite geöffnet ist</string>
+    <string name="oura_live_smoothing_info">Anzeigeglättung: HF 3 s · XYZ 250 ms. Inspektion bleibt roh.</string>
+    <string name="oura_recorded_health">Aufgezeichnete Gesundheit</string>
+    <string name="oura_host_motion">Aufgezeichnete Live-XYZ</string>
+    <string name="oura_host_motion_info">Host-erfasste Sekunden · signed16-Rohwerte. Getrennt von gespeicherter Ringbewegung; Kalibrierung unvalidiert.</string>
+    <string name="oura_host_x">Host X Mittelwert</string>
+    <string name="oura_host_y">Host Y Mittelwert</string>
+    <string name="oura_host_z">Host Z Mittelwert</string>
+    <string name="oura_host_min">Host Achsenminimum</string>
+    <string name="oura_host_max">Host Achsenmaximum</string>
+    <string name="oura_host_count">Vektoren pro Sekunde</string>
+    <string name="oura_vectors_unit">Vektoren</string>
+    <string name="oura_host_sample_count">%1$d Vektoren</string>
+    <string name="oura_host_axis_detail">%1$s: Mittel %2$s · Min %3$d · Max %4$d</string>
+    <string name="oura_host_receipt_bounds">Host-Empfang: %1$s – %2$s</string>
 </resources>

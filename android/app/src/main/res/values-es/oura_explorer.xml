@@ -6,7 +6,7 @@
   <string name="oura_live_requires_ring">El modo en directo requiere que el anillo seleccionado sea el dispositivo Oura activo.</string>
   <string name="oura_live_disconnected">Anillo desconectado</string>
   <string name="oura_sleep_history">Las sesiones de sueño están disponibles en Historial.</string>
-  <string name="oura_latest_recorded_info">Últimos valores registrados, con la hora de lectura. Los valores ausentes no tienen lecturas en los últimos 15 minutos.</string>
+  <string name="oura_latest_recorded_info">Últimos valores registrados en el intervalo del historial seleccionado, con horas de observación.</string>
   <string name="oura_bucket_width_seconds">Intervalos de mediana: %1$d segundos</string>
   <string name="oura_motion_seconds">Segundos de movimiento</string>
   <string name="oura_motion_x">Eje X</string>
@@ -59,4 +59,22 @@
     <item quantity="one">Cursor: hace %1$d segundo</item>
     <item quantity="other">Cursor: hace %1$d segundos</item>
   </plurals>
+    <string name="oura_category">Categoría</string>
+    <string name="oura_expanded">Expandido</string>
+    <string name="oura_collapsed">Contraído</string>
+    <string name="oura_live_page_open">En vivo mientras esta página esté abierta</string>
+    <string name="oura_live_smoothing_info">Suavizado visual: FC 3 s · XYZ 250 ms. Inspección sin procesar.</string>
+    <string name="oura_recorded_health">Salud registrada</string>
+    <string name="oura_host_motion">XYZ en vivo registrados</string>
+    <string name="oura_host_motion_info">Segundos capturados en el dispositivo · valores signed16. Separados del movimiento guardado del anillo; calibración sin validar.</string>
+    <string name="oura_host_x">Media X local</string>
+    <string name="oura_host_y">Media Y local</string>
+    <string name="oura_host_z">Media Z local</string>
+    <string name="oura_host_min">Mínimo de eje local</string>
+    <string name="oura_host_max">Máximo de eje local</string>
+    <string name="oura_host_count">Vectores por segundo</string>
+    <string name="oura_vectors_unit">vectores</string>
+    <string name="oura_host_sample_count">%1$d vectores</string>
+    <string name="oura_host_axis_detail">%1$s: media %2$s · mín. %3$d · máx. %4$d</string>
+    <string name="oura_host_receipt_bounds">Recepciones locales: %1$s – %2$s</string>
 </resources>

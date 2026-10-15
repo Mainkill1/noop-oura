@@ -47,7 +47,7 @@ data class OuraLiveMotionSummary(val values: Map<String, Long>) {
         }
     }
     companion object {
-        // Swift twin: `OuraLiveMotionSummary.numericKeys`.
+        // Corresponding Swift property: `OuraLiveMotionSummary.numericKeys`.
         internal val numericKeys = setOf("count", "first_receipt_ms", "last_receipt_ms") +
             listOf("x", "y", "z").flatMap { axis -> listOf("sum_$axis", "min_$axis", "max_$axis") }
         const val EVENT_KIND = "OURA_LIVE_MOTION"

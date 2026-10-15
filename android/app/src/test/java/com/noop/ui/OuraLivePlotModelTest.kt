@@ -44,4 +44,15 @@ class OuraLivePlotModelTest {
         assertEquals(listOf(1.0, 9.0), ouraLiveInspect(points, 0, 1500).map { it.value })
         assertTrue(ouraLiveInspect(points, 5000, 1500).isEmpty())
     }
+
+    @Test fun motionSmoothingUses250msReceiptWindowPreservesVectorsGapsAndRawInspection() {
+        val raw = listOf(OuraLivePoint(0, -100.0), OuraLivePoint(0, 100.0),
+            OuraLivePoint(100, 300.0), OuraLivePoint(251, 500.0), OuraLivePoint(2000, -700.0))
+        assertEquals(listOf(-100.0, 0.0, 100.0, 400.0, -700.0), ouraLiveMotionTrend(raw).map { it.value })
+        assertEquals(listOf(-100.0, 100.0), ouraLiveInspect(raw, 0, 1500).map { it.value })
+        val burst = (0 until 6000).map { OuraLivePoint(it * 10L, if (it % 2 == 0) 32767.0 else -32768.0) }
+        val projection = ouraLiveSegments(ouraLiveMotionTrend(burst), 0, 60000, 100, 1500).flatten()
+        assertTrue(projection.size <= 404)
+        assertEquals(6000, burst.size)
+    }
 }

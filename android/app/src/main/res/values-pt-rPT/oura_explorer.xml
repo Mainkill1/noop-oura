@@ -6,7 +6,7 @@
   <string name="oura_live_requires_ring">O modo em direto requer que o anel selecionado seja o dispositivo Oura ativo.</string>
   <string name="oura_live_disconnected">Anel desligado</string>
   <string name="oura_sleep_history">As sessões de sono estão disponíveis no Histórico.</string>
-  <string name="oura_latest_recorded_info">Últimos valores registados, com a hora da leitura. Os valores em falta não têm leituras nos últimos 15 minutos.</string>
+  <string name="oura_latest_recorded_info">Últimos valores registados no intervalo selecionado do histórico, com horas de observação.</string>
   <string name="oura_bucket_width_seconds">Intervalos de mediana: %1$d segundos</string>
   <string name="oura_motion_seconds">Segundos de movimento</string>
   <string name="oura_motion_x">Eixo X</string>
@@ -59,4 +59,22 @@
     <item quantity="one">Cursor: há %1$d segundo</item>
     <item quantity="other">Cursor: há %1$d segundos</item>
   </plurals>
+    <string name="oura_category">Categoria</string>
+    <string name="oura_expanded">Expandido</string>
+    <string name="oura_collapsed">Recolhido</string>
+    <string name="oura_live_page_open">Em direto enquanto esta página estiver aberta</string>
+    <string name="oura_live_smoothing_info">Suavização visual: FC 3 s · XYZ 250 ms. Inspeção em bruto.</string>
+    <string name="oura_recorded_health">Saúde registada</string>
+    <string name="oura_host_motion">XYZ em direto registados</string>
+    <string name="oura_host_motion_info">Segundos capturados localmente · valores signed16. Separados do movimento guardado no anel; calibração não validada.</string>
+    <string name="oura_host_x">Média X local</string>
+    <string name="oura_host_y">Média Y local</string>
+    <string name="oura_host_z">Média Z local</string>
+    <string name="oura_host_min">Mínimo do eixo local</string>
+    <string name="oura_host_max">Máximo do eixo local</string>
+    <string name="oura_host_count">Vetores por segundo</string>
+    <string name="oura_vectors_unit">vetores</string>
+    <string name="oura_host_sample_count">%1$d vetores</string>
+    <string name="oura_host_axis_detail">%1$s: média %2$s · mín. %3$d · máx. %4$d</string>
+    <string name="oura_host_receipt_bounds">Receções locais: %1$s – %2$s</string>
 </resources>

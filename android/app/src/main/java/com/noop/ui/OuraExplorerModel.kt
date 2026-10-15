@@ -9,7 +9,7 @@ internal fun ouraCategoryKeys(imported: Boolean, category: OuraCategory): List<S
         else listOf("hr", "oxygen", "temperature", "hrv", "breathing", "battery")
     val sleep = if (imported) listOf("sleep_total_min", "sleep_deep_min", "sleep_rem_min", "ref_sleep_score") else emptyList()
     val movement = if (imported) listOf("steps", "energy_kcal", "total_kcal", "ref_activity_score")
-        else listOf("movement", "motion_x", "motion_y", "motion_z", "motion_low", "motion_high")
+        else listOf("movement", "motion_x", "motion_y", "motion_z", "motion_low", "motion_high", "live_motion_x", "live_motion_y", "live_motion_z", "live_motion_count")
     return when (category) {
         OuraCategory.Health -> health
         OuraCategory.Sleep -> sleep

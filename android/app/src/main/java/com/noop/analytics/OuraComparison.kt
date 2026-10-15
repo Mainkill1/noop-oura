@@ -47,11 +47,3 @@ object OuraComparison {
     }
     fun bucketAt(buckets: List<SignalDecimation.Bucket>, ts: Long): SignalDecimation.Bucket? = buckets.getOrNull(indexAt(buckets, ts))
 }
-
-/** A current stream needs both source evidence and a recent, nonfuture original observation. */
-object OuraLivePresentation {
-    fun isFresh(selectedActive: Boolean, connected: Boolean, streaming: Boolean, lastTs: Long?, now: Long): Boolean =
-        selectedActive && connected && streaming && lastTs != null && now - lastTs in 0..30
-
-    fun window(now: Long): Pair<Long, Long> = (Math.floorDiv(now, 5) * 5 - 900) to (now + 1)
-}

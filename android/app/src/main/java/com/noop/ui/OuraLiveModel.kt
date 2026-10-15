@@ -19,6 +19,30 @@ internal class OuraLiveOwner(private val emit: (OuraLiveIntent) -> Unit) {
     private var owner: Pair<String, Long>? = null
     private var desired = OuraLiveSelection()
     val hasOwnership: Boolean get() = owner != null
+    private var entry: String? = null
+    private var awaitingIdle = false
+    private var observed: Pair<String, Long>? = null
+    private var stopped: Pair<String, Long>? = null
+    /** Only visibility, authenticated source identity and desired channels can create a request. */
+    fun present(snapshot: OuraLiveSessionSnapshot, sourceId: String, visible: Boolean,
+        ready: Boolean, selection: OuraLiveSelection) {
+        observed = snapshot.sourceDeviceId?.let { it to snapshot.generation }
+        val next = sourceId.takeIf { visible && ready && snapshot.sourceDeviceId == sourceId && (selection.hr || selection.motion) }
+        if (next != entry) {
+            stop()
+            entry = next
+            awaitingIdle = next != null && (snapshot.active || stopped == observed)
+            if (next != null && !awaitingIdle) start(snapshot, selection)
+        } else if (next != null) {
+            if (awaitingIdle) {
+                if (!snapshot.active && stopped != observed) { awaitingIdle = false; start(snapshot, selection) }
+                return
+            }
+            observe(snapshot)
+            update(selection)
+        }
+    }
+    fun hide() { entry = null; awaitingIdle = false; stop() }
     fun start(snapshot: OuraLiveSessionSnapshot, selection: OuraLiveSelection) {
         if (owner != null || snapshot.active || (!selection.hr && !selection.motion)) return
         val id = snapshot.sourceDeviceId ?: return
@@ -27,6 +51,7 @@ internal class OuraLiveOwner(private val emit: (OuraLiveIntent) -> Unit) {
         emit(OuraLiveIntent(OuraLiveAction.Start, id, snapshot.generation, selection))
     }
     fun observe(snapshot: OuraLiveSessionSnapshot) {
+        observed = snapshot.sourceDeviceId?.let { it to snapshot.generation }
         val owned = owner ?: return
         if (snapshot.sourceDeviceId != owned.first || (!snapshot.active && snapshot.generation != owned.second)) owner = null
     }
@@ -38,6 +63,7 @@ internal class OuraLiveOwner(private val emit: (OuraLiveIntent) -> Unit) {
     }
     fun stop() {
         val owned = owner ?: return
+        stopped = observed?.takeIf { it.first == owned.first } ?: owned
         owner = null
         emit(OuraLiveIntent(OuraLiveAction.Stop, owned.first, owned.second))
     }
@@ -98,4 +124,15 @@ internal fun ouraLiveInspect(raw: List<OuraLivePoint>, at: Long, toleranceMs: Lo
     val nearest = raw.minByOrNull { abs(it.elapsedMs - at) } ?: return emptyList()
     if (abs(nearest.elapsedMs - at) > toleranceMs / 2) return emptyList()
     return raw.filter { it.elapsedMs == nearest.elapsedMs }
+}
+
+/** Display-only 250 ms trailing mean of actual receipts; same-receipt vectors remain separate. */
+internal fun ouraLiveMotionTrend(raw: List<OuraLivePoint>): List<OuraLivePoint> {
+    val window = java.util.ArrayDeque<OuraLivePoint>()
+    var sum = 0.0
+    return raw.map { point ->
+        while (window.isNotEmpty() && window.first.elapsedMs < point.elapsedMs - 250) sum -= window.removeFirst().value
+        window.addLast(point); sum += point.value
+        point.copy(value = sum / window.size)
+    }
 }

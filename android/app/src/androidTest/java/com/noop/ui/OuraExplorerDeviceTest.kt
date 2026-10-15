@@ -24,17 +24,17 @@ import org.junit.Test
 class OuraExplorerDeviceTest {
     @get:Rule val compose = createComposeRule()
 
-    @Test fun sliderAndCategoryTabsHaveIndependentSelections() {
+    @Test fun sliderAndCategoryDropdownHaveIndependentSelections() {
         var mode by mutableStateOf(OuraViewMode.History)
         var category by mutableStateOf(OuraCategory.Health)
         compose.setContent { Theme { OuraExplorerNavigation(mode, category, { mode = it }, { category = it }) } }
         compose.onNodeWithText("Live").performClick().assertIsSelected()
-        compose.onNodeWithText("Movement").performClick().assertIsSelected()
+        selectCategory(OuraCategory.Movement)
         assertEquals(OuraViewMode.Live, mode)
         compose.onNodeWithText("History").performClick().assertIsSelected()
         assertEquals(OuraCategory.Movement, category)
         captureEvidence("explorer-navigation")
-        compose.onNodeWithText("Sleep").performClick().assertIsSelected()
+        selectCategory(OuraCategory.Sleep)
         compose.onNodeWithContentDescription("Live or history").performTouchInput { swipeRight() }
         assertEquals(OuraViewMode.Live, mode)
         assertEquals(OuraCategory.Sleep, category)
@@ -90,7 +90,8 @@ class OuraExplorerDeviceTest {
         } }
         compose.onNodeWithTag("oura-comparison-plot").performScrollTo()
         captureEvidence("explorer-comparison-populated")
-        compose.onNodeWithText("Movement").performScrollTo().performClick()
+        compose.onNodeWithTag("oura-category-picker").performScrollTo()
+        selectCategory(OuraCategory.Movement)
         compose.onNodeWithText("Orientation code").performScrollTo().assertIsDisplayed()
         captureEvidence("explorer-movement-details")
     }
@@ -126,6 +127,12 @@ class OuraExplorerDeviceTest {
         assertNull(parsed.orientation)
         assertEquals(1016.0, OuraMotionWindow.parse(1, """{"motion_seconds":31,"x":1016}""")!!.x!!, 0.0)
         assertNull(OuraMotionWindow.parse(1, """{"motion_seconds":1.5}"""))
+    }
+
+    private fun selectCategory(category: OuraCategory) {
+        compose.onNodeWithTag("oura-category-picker").performClick()
+        compose.onNodeWithTag("oura-category-${category.name}").performClick()
+        compose.onNodeWithTag("oura-category-picker").assertTextContains(category.name, substring = true)
     }
 
     private fun captureEvidence(name: String) {

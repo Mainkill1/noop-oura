@@ -35,11 +35,12 @@ internal fun OuraControls(
     val context = LocalContext.current
     var sourceMenu by remember { mutableStateOf(false) }
     var actionsMenu by remember { mutableStateOf(false) }
-    NoopCard {
-        Column(verticalArrangement = Arrangement.spacedBy(Metrics.space12)) {
+    OuraPanel {
+        Column(verticalArrangement = Arrangement.spacedBy(Metrics.space8)) {
+            Text(stringResource(R.string.oura_source), style = NoopType.caption, color = Palette.textTertiary)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.weight(1f)) {
-                    TextButton(onClick = { sourceMenu = true }, enabled = sources.isNotEmpty(), modifier = Modifier.testTag("oura-source-picker")) {
+                    TextButton(shape = androidx.compose.foundation.shape.RoundedCornerShape(Metrics.cornerXs), onClick = { sourceMenu = true }, enabled = sources.isNotEmpty(), modifier = Modifier.testTag("oura-source-picker")) {
                         Text(sources.firstOrNull { it.id == sourceId }?.name ?: stringResource(R.string.oura_source),
                             modifier = Modifier.weight(1f, fill = false), maxLines = 2, overflow = TextOverflow.Ellipsis,
                             color = Palette.textPrimary)
@@ -87,9 +88,9 @@ internal fun OuraControls(
                         Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = stringResource(R.string.oura_next))
                     }
                 }
-                SegmentedPillControl(items = listOf(1, 7, 30), selection = days,
+                OuraToolbar(items = listOf(1, 7, 30), selection = days,
                     label = { context.getString(if (it == 1) R.string.oura_one_day else R.string.oura_days, it) },
-                    onSelect = onDays, adaptsToAvailableWidth = true, modifier = Modifier.fillMaxWidth(),
+                    onSelect = onDays, modifier = Modifier.fillMaxWidth(),
                     accessibilityLabel = stringResource(R.string.oura_window))
                 if (days > 1) Text(
                     day.minusDays(days.toLong() - 1).format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)) +

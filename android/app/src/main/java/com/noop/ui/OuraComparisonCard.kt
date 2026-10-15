@@ -58,15 +58,15 @@ internal fun OuraComparisonCard(keys: List<String>, signals: Map<String, SignalD
         else ui.label + ": " + context.getString(R.string.oura_bucket_detail, value(ui.trace, bucket.median),
             value(ui.trace, bucket.minimum), value(ui.trace, bucket.maximum), bucket.count) + " · " + time(bucket.start) + " – " + time(bucket.end)
     }
-    NoopCard {
-        Column(verticalArrangement = Arrangement.spacedBy(Metrics.space12)) {
+    OuraPanel {
+        Column(verticalArrangement = Arrangement.spacedBy(Metrics.space8)) {
             Text(stringResource(R.string.oura_compare_title), style = NoopType.headline, color = Palette.textPrimary)
             Text(stringResource(R.string.oura_compare_info), style = NoopType.caption, color = Palette.textSecondary)
             Text(stringResource(R.string.oura_compare_count, selectedKeys.size), style = NoopType.captionNumber, color = Palette.textSecondary)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(Metrics.space8), verticalArrangement = Arrangement.spacedBy(Metrics.space4)) {
                 keys.forEach { key ->
                     val (title) = ouraPresentation(key, imported, temp)
-                    FilterChip(selected = key in selectedKeys,
+                    FilterChip(shape = androidx.compose.foundation.shape.RoundedCornerShape(Metrics.cornerXs), selected = key in selectedKeys,
                         onClick = { onSelect(OuraComparison.toggle(selectedKeys, key)) },
                         enabled = key in selectedKeys || selectedKeys.size < 4,
                         modifier = Modifier.testTag("oura-trace-$key"),
@@ -82,7 +82,7 @@ internal fun OuraComparisonCard(keys: List<String>, signals: Map<String, SignalD
                 axes.forEach { (id, axis) ->
                     val members = traces.filter { it.trace.axisId == id }
                     val first = members.first()
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(Metrics.space12), verticalArrangement = Arrangement.spacedBy(Metrics.space4)) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(Metrics.space8), verticalArrangement = Arrangement.spacedBy(Metrics.space4)) {
                         members.forEach { member ->
                             val index = traces.indexOf(member)
                             Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
@@ -130,11 +130,12 @@ internal fun OuraComparisonCard(keys: List<String>, signals: Map<String, SignalD
 }
 
 /** Identity includes semantic dimension as well as unit: a temperature deviation is not absolute temperature. */
-private fun ouraComparisonDimension(key: String): String = when (key) {
+internal fun ouraComparisonDimension(key: String): String = when (key) {
     "hr", "rhr" -> "heart_rate"
     "temperature" -> "absolute_temperature"
     "skin_temp_dev_c" -> "relative_temperature"
     "motion_x", "motion_y", "motion_z" -> "motion_axes"
+    "live_motion_x", "live_motion_y", "live_motion_z" -> "host_signed16_axes"
     "motion_low", "motion_high" -> "motion_intensity"
     "energy_kcal", "total_kcal" -> "energy"
     "sleep_total_min", "sleep_deep_min", "sleep_rem_min" -> "sleep_duration"
