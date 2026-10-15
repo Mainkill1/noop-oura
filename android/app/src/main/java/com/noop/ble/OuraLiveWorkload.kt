@@ -10,17 +10,6 @@ internal class OuraLiveWorkload {
     val hasDemand: Boolean get() = desired != null
     private var applied: OuraLiveSelection? = null
     private var appliedGeneration = generation
-    var unfinishedMotionDeadlineElapsedMs: Long? = null
-        private set
-    fun armMotionDeadline(now: Long): Long {
-        val deadline = unfinishedMotionDeadlineElapsedMs ?: (now + 60_000L)
-        unfinishedMotionDeadlineElapsedMs = deadline
-        return deadline
-    }
-    fun motionShutdownCompleted(sessionActive: Boolean) {
-        if (!sessionActive) unfinishedMotionDeadlineElapsedMs = null
-    }
-    fun resetMotionBudget() { unfinishedMotionDeadlineElapsedMs = null }
     fun acceptsSamples(generation: Long, motion: Boolean = false): Boolean {
         if (generation != this.generation || appliedGeneration != generation) return false
         return if (motion) desired?.motion == true && applied?.motion == true

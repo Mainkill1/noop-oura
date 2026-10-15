@@ -16,9 +16,11 @@ public struct OuraLiveMotionPacket: Equatable, Sendable {
 
 /// Strict candidate response layout, independently implemented from OURA_LIVE_PROTOCOL.md facts.
 public enum OuraLiveMotion {
+    // Kotlin twin: `OuraLiveMotion.decode`.
     public static func decode(_ frame: OuraOuterFrame) -> OuraLiveMotionPacket? {
         let bytes = frame.body
         guard frame.op == 0x33, bytes.count == 8 || bytes.count == 14 else { return nil }
+        // Kotlin twin: `OuraLiveMotion.signed16`.
         func signed16(_ offset: Int) -> Int {
             Int(Int16(bitPattern: UInt16(bytes[offset]) | (UInt16(bytes[offset + 1]) << 8)))
         }

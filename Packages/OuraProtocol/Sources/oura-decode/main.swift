@@ -30,7 +30,7 @@ import OuraProtocol
 struct CaptureRecord: Decodable {
     let hex: String
     let kind: String?
-    let tsMs: Int?
+    let tsMs: Int64?
     enum CodingKeys: String, CodingKey { case hex, kind; case tsMs = "ts_ms" }
 }
 
@@ -48,6 +48,15 @@ USAGE:
   oura-decode [--gen gen3|gen4|gen5] [--allow-tier-b] [--json] [FILE]
   cat capture.json | oura-decode --gen gen3
   oura-decode --hex 600e0100000000010401000000000000
+  oura-decode --live-motion [--json] [FILE | --hex HEX ...]
+  oura-decode --live-motion-commands
+  oura-decode --live-motion-summary [FILE]
+
+Summary mode requires ts_ms on each captured notification and exports host-time
+seconds with count, sums, means, extrema and receipt bounds as JSON.
+
+Live motion replays captured notifications offline; commands prints finite Start/OFF bytes
+and exits without reading stdin. No command is sent. Metadata remains opaque raw data.
 
 Reads a capture/fixture JSON array of {"hex": ...} from FILE or stdin, or raw
 records from --hex. Generation defaults to gen3. Tier-B (UNVERIFIED) tags are
@@ -57,6 +66,10 @@ dropped unless --allow-tier-b is passed, so unverified layouts never feed values
 var gen: OuraRingGen = .gen3
 var allowTierB = false
 var jsonOut = false
+var liveMotion = false
+var liveMotionCommands = false
+var liveMotionSummary = false
+var genExplicit = false
 var hexArgs: [String] = []
 var filePath: String?
 
@@ -68,8 +81,12 @@ while i < args.count {
     case "-h", "--help":
         print(helpText); exit(0)
     case "--json": jsonOut = true
+    case "--live-motion": liveMotion = true
+    case "--live-motion-summary": liveMotionSummary = true; liveMotion = true
+    case "--live-motion-commands": liveMotionCommands = true
     case "--allow-tier-b": allowTierB = true
     case "--gen":
+        genExplicit = true
         i += 1
         guard i < args.count else { die("--gen needs a value") }
         switch args[i] {
@@ -86,10 +103,24 @@ while i < args.count {
         continue
     default:
         if a.hasPrefix("-") { die("unknown option: \(a)") }
+        guard filePath == nil else { die("only one capture FILE may be provided") }
         filePath = a
     }
     i += 1
 }
+
+// Offline inspection only: builders produce bytes; this executable has no transport.
+if liveMotionCommands {
+    guard !liveMotion, !jsonOut, !allowTierB, !genExplicit, hexArgs.isEmpty, filePath == nil else {
+        die("--live-motion-commands cannot be combined with capture or decoding options")
+    }
+    for command in [OuraCommands.liveMotionStart(), OuraCommands.liveMotionStop()] {
+        print(command.label + " " + command.bytes.map { String(format: "%02x", $0) }.joined())
+    }
+    exit(0)
+}
+
+guard hexArgs.isEmpty || filePath == nil else { die("FILE and --hex cannot be combined") }
 
 // MARK: - Gather input records
 
@@ -168,6 +199,7 @@ var jsonLines: [JSONLine] = []
 var total = 0
 var decodedCount = 0
 var tagCounts: [String: Int] = [:]
+var motionSummaries: [Int64: OuraLiveMotionSummary] = [:]
 
 for (n, rec) in records.enumerated() {
     guard let raw = bytes(fromHex: rec.hex) else {
@@ -175,6 +207,31 @@ for (n, rec) in records.enumerated() {
         continue
     }
     total += 1
+    if liveMotion || raw.first == 0x33 {
+        if liveMotionSummary && rec.tsMs == nil { die("--live-motion-summary requires a host-receipt ts_ms for every capture record") }
+        let frames = OuraFraming.parseOuterFrames(raw)
+        let complete = !frames.isEmpty && frames.reduce(0) { $0 + $1.totalLength } == raw.count
+        let packets = complete ? frames.compactMap { OuraLiveMotion.decode($0) } : []
+        if packets.isEmpty && !liveMotionSummary {
+            if jsonOut { jsonLines.append(JSONLine(index: n, kind: "undecoded", detail: "invalid or unsupported live motion notification")) }
+            else { print("[\(n)] (no live motion)") }
+        }
+        for packet in packets {
+            if liveMotionSummary, let epochMs = rec.tsMs {
+                for xyz in packet.samples {
+                    let next = OuraLiveMotionSummary.sample(epochMs: epochMs, xyz: xyz)
+                    motionSummaries[next.ts] = motionSummaries[next.ts]?.merge(next) ?? next
+                }
+                continue
+            }
+            let vectors = packet.samples.map { "(\($0.x),\($0.y),\($0.z))" }.joined(separator: ";")
+            let detail = "LIVE_MOTION metadata=\(packet.metadataByte) sequence=\(packet.sequence) xyz=\(vectors)"
+            decodedCount += 1; tagCounts["LIVE_MOTION", default: 0] += 1
+            if jsonOut { jsonLines.append(JSONLine(index: n, kind: "LIVE_MOTION", detail: detail)) }
+            else { print("[\(n)] " + detail) }
+        }
+        continue
+    }
     let events = driver.ingest(notification: raw, reassembler: reassembler)
     if events.isEmpty {
         // Show the raw tag so an undecoded record is visible (the RE worklist), without guessing.
@@ -200,7 +257,17 @@ for (n, rec) in records.enumerated() {
     }
 }
 
-if jsonOut {
+if liveMotionSummary {
+    var summaries: [[String: Any]] = []
+    for summary in motionSummaries.sorted(by: { $0.key < $1.key }).map(\.value) {
+        var object = try JSONSerialization.jsonObject(with: Data(summary.payloadJSON().utf8)) as! [String: Any]
+        object["ts"] = summary.ts
+        for axis in ["x", "y", "z"] { object["mean_\(axis)"] = summary.mean(axis) }
+        summaries.append(object)
+    }
+    let data = try JSONSerialization.data(withJSONObject: summaries, options: [.sortedKeys])
+    print(String(decoding: data, as: UTF8.self))
+} else if jsonOut {
     let enc = JSONEncoder()
     enc.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]
     if let data = try? enc.encode(jsonLines), let s = String(data: data, encoding: .utf8) {

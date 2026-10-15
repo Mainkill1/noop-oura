@@ -26,6 +26,9 @@ import android.os.Handler
 import android.os.Looper
 import android.os.ParcelUuid
 import com.noop.data.OuraStreamMapping
+import com.noop.data.EventEntry
+import com.noop.oura.OuraLiveMotionPacket
+import com.noop.oura.OuraLiveMotionSummary
 import com.noop.data.StreamBatch
 import com.noop.data.StreamPersistence
 import com.noop.oura.OuraAuth
@@ -497,6 +500,7 @@ class OuraLiveSource(
         private var timeout: Runnable? = null
         private val teardownDeadline = Runnable { finishTeardown() }
         val queue: OuraWriteQueue = OuraWriteQueue(
+            elapsedMs = { SystemClock.elapsedRealtime() },
             submit = { command -> submitWrite(link, characteristic, command) },
             onStarted = { command ->
                 val task = Runnable { queueTimeout(command) }
@@ -504,9 +508,6 @@ class OuraLiveSource(
                 handler.postDelayed(task, WRITE_CALLBACK_TIMEOUT_MS)
             },
             onFinished = { cancelTimeout() },
-            onCompleted = { command ->
-                if (command.label == "acm_stop") liveWorkload.motionShutdownCompleted(sessionMemory.snapshot.active)
-            },
             onFailure = { command, reason ->
                 log("Oura: write ${command.label} failed ($reason) - closing this session without replay")
                 handler.post {
@@ -1350,7 +1351,6 @@ class OuraLiveSource(
         liveHRDemand.reset()
         motionNeedsShutdown = false
         motionArmed = false
-        liveWorkload.resetMotionBudget()
         historyPausedForLive = false
         _historySyncPhase.value = OuraHistorySyncPhase.IDLE
         clearAuthWatchdog()   // a fresh session starts with a clean escalation count
@@ -2005,12 +2005,10 @@ class OuraLiveSource(
                 sessionMemory.start(selection, SystemClock.elapsedRealtime())
                 hrUnavailable = false; motionUnavailable = false
                 hrRequestedAt = null; motionRequestedAt = null
-                motionDeadlineElapsedMs = liveWorkload.unfinishedMotionDeadlineElapsedMs
-                motionDeadlineElapsedMs?.let { deadline ->
-                    handler.postDelayed(liveDeadline, (deadline - SystemClock.elapsedRealtime()).coerceAtLeast(0))
-                }
+                liveMotionAnchorElapsedMs = SystemClock.elapsedRealtime()
+                liveMotionAnchorEpochMs = System.currentTimeMillis()
                 liveMotionPackets = 0; liveMotionSamples = 0
-                log("Oura: explicit live session started (generation=${change.generation}, HR=${selection.hr}, ACM=${selection.motion})")
+                log("Oura: live session started (generation=${change.generation}, HR=${selection.hr}, ACM=${selection.motion})")
                 if (!liveLifecycleRegistered) {
                     (appContext as? Application)?.registerActivityLifecycleCallbacks(liveLifecycle)
                     liveLifecycleRegistered = true
@@ -2042,15 +2040,30 @@ class OuraLiveSource(
     private var historyPausedForLive = false
     private var motionArmed = false
     private var motionNeedsShutdown = false
-    private var motionDeadlineElapsedMs: Long? = null
+    private var liveMotionAnchorElapsedMs = 0L
+    private var liveMotionAnchorEpochMs = 0L
+    private var liveMotionSummary: OuraLiveMotionSummary? = null
+    private fun flushLiveMotion() {
+        val summary = liveMotionSummary ?: return
+        liveMotionSummary = null
+        persist(StreamBatch(events = listOf(EventEntry(summary.ts,
+            OuraLiveMotionSummary.EVENT_KIND, summary.payloadJSON()))), deviceId)
+    }
+    private fun flushLiveMotionBefore(now: Long) {
+        val epochMs = liveMotionAnchorEpochMs + now - liveMotionAnchorElapsedMs
+        if (liveMotionSummary?.ts?.let { it < epochMs / 1000 } == true) flushLiveMotion()
+    }
+    private fun recordLiveMotion(packet: OuraLiveMotionPacket, receipt: Long) {
+        val epochMs = liveMotionAnchorEpochMs + receipt - liveMotionAnchorElapsedMs
+        for (xyz in packet.samples) {
+            val next = OuraLiveMotionSummary.sample(epochMs, xyz)
+            if (liveMotionSummary?.ts != next.ts) flushLiveMotion()
+            liveMotionSummary = liveMotionSummary?.merge(next) ?: next
+        }
+    }
     private var liveMotionPackets = 0L
     private var liveMotionSamples = 0L
     private var liveLifecycleRegistered = false
-    private val liveDeadline = Runnable {
-        liveStopReason = "one-minute motion deadline"
-        invalidateLiveWorkload()
-        endLiveSession(liveStopReason)
-    }
     private val liveTick = object : Runnable {
         override fun run() {
             if (!sessionMemory.snapshot.active) return
@@ -2068,6 +2081,8 @@ class OuraLiveSource(
                 liveTransportDirty = true
                 scheduleLiveWorker()
             }
+            if (liveWorkload.acceptsSamples(liveWorkload.generation, motion = true) && !motionUnavailable) commandQueue?.renewMotionLease()
+            flushLiveMotionBefore(now)
             sessionMemory.tick(now)
             publishLiveSession()
             handler.postDelayed(this, 500L)
@@ -2086,7 +2101,7 @@ class OuraLiveSource(
         sessionMemory.snapshot.let { it.active && it.selection.hr }
     private fun publishLiveSession() {
         _liveSession.value = sessionMemory.snapshot.copy(sourceDeviceId = deviceId, generation = liveWorkload.generation,
-            motionDeadlineElapsedMs = motionDeadlineElapsedMs)
+            motionDeadlineElapsedMs = null)
     }
     private fun ownsLiveSession(expectedDeviceId: String, expectedGeneration: Long?): Boolean =
         expectedDeviceId == deviceId && (expectedGeneration == null || expectedGeneration == liveWorkload.generation ||
@@ -2144,14 +2159,7 @@ class OuraLiveSource(
         liveHRDemand.update(selection.hr, ready = true)
         if (selection.hr) scheduleReengage() else cancelReengage()
         motionArmed = selection.motion
-        if (motionArmed) {
-            motionNeedsShutdown = true
-            if (motionDeadlineElapsedMs == null) {
-                val deadline = liveWorkload.armMotionDeadline(now)
-                motionDeadlineElapsedMs = deadline
-                handler.postDelayed(liveDeadline, (deadline - now).coerceAtLeast(0))
-            }
-        }
+        if (motionArmed) motionNeedsShutdown = true
         // Queue state preserves retained channels and pending OFFs; only missing starts are appended.
         commandQueue?.reconcileLive(selection, allowStarts = true)
         if (driver?.phase == OuraDriverPhase.Streaming) {
@@ -2162,10 +2170,9 @@ class OuraLiveSource(
     }
     private fun endLiveSession(reason: String, resumeHistory: Boolean = true) {
         val wasActive = sessionMemory.snapshot.active
+        flushLiveMotion()
         sessionMemory.stop(clearSamples = !resumeHistory)
         handler.removeCallbacks(liveTick)
-        handler.removeCallbacks(liveDeadline)
-        motionDeadlineElapsedMs = null
         if (liveLifecycleRegistered) (appContext as? Application)?.unregisterActivityLifecycleCallbacks(liveLifecycle)
         liveLifecycleRegistered = false
         liveHRDemand.update(wanted = false, ready = reachedStreaming)
@@ -2279,6 +2286,7 @@ class OuraLiveSource(
             if (frame.op == 0x33) {
                 val packet = OuraLiveMotion.decode(frame)
                 if (completelyFramed && liveWorkload.acceptsSamples(liveGeneration, motion = true) && packet != null && sessionMemory.noteMotion(packet, receivedAtElapsedMs)) {
+                    recordLiveMotion(packet, receivedAtElapsedMs)
                     liveMotionPackets += 1
                     liveMotionSamples += packet.samples.size
                     if (liveMotionPackets == 1L) log("Oura: first valid ACM packet (${frame.body.size}B, metadata=${packet.metadataByte})")

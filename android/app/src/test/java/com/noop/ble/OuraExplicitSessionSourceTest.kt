@@ -17,8 +17,9 @@ import java.time.Duration
 @Config(application = Application::class)
 class OuraExplicitSessionSourceTest {
     private val live = mutableListOf<Pair<Int,List<Int>>>()
+    private val persisted = mutableListOf<com.noop.data.StreamBatch>()
     private val source = OuraLiveSource(RuntimeEnvironment.getApplication(), "oura-session-test", OuraRingGen.GEN3,
-        { hr, rr -> live.add(hr to rr) }, { null })
+        { hr, rr -> live.add(hr to rr) }, { null }, persist = { batch, _ -> persisted.add(batch) })
     private val driver = OuraDriver(OuraRingGen.GEN3, null).also {
         it.liveHRWanted = false
         it.nextStep(OuraTransition.AuthCompleted(OuraAuthStatus.SUCCESS))
@@ -30,7 +31,7 @@ class OuraExplicitSessionSourceTest {
         .apply { isAccessible = true }.invoke(source, bytes.map(Int::toByte).toByteArray(), source.liveSession.value.generation, android.os.SystemClock.elapsedRealtime())
 
     private fun attachQueue(target: OuraLiveSource = source, sent: MutableList<String>): OuraWriteQueue {
-        val queue = OuraWriteQueue(submit = { sent.add(it.label); true })
+        val queue = OuraWriteQueue(submit = { sent.add(it.label); true }, elapsedMs = { android.os.SystemClock.elapsedRealtime() })
         OuraLiveSource::class.java.getDeclaredField("commandQueue").apply { isAccessible = true }.set(target, queue)
         return queue
     }
@@ -159,6 +160,7 @@ class OuraExplicitSessionSourceTest {
         assertEquals(OuraLiveStreamPhase.WAITING, source.liveSession.value.hr.phase)
         notification(0x2f,15,0x28,2,0,2,0,0,1,4,0,0,0,0,0,0,127)
         assertEquals(listOf(59), source.liveSession.value.hr.samples.map { it.bpm })
+        assertEquals(listOf(59), live.map { it.first })
         source.stopLiveSession()
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(150))
         notification(0x33,8,50,8,4,0,5,0,6,0)
@@ -178,16 +180,71 @@ class OuraExplicitSessionSourceTest {
         source.stopLiveSession()
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(150))
     }
-    @Test fun motionDeadlineStopsSessionAndSelectionUpdatesCannotExtendIt() {
+    @Test fun motionLeaseRenewsContinuouslyAndStopsWithoutDelayedRestart() {
         ready()
-        source.startLiveSession(OuraLiveSelection(motion = true))
-        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(150))
+        val sent = mutableListOf<String>()
+        val queue = attachQueue(sent = sent)
+        source.startLiveSession(OuraLiveSelection(motion = true)); settle(); drain(queue)
+        notification(0x33,8,50,7,1,0,2,0,3,0)
+        repeat(3) {
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(50))
+            drain(queue)
+        }
         assertTrue(source.liveSession.value.active)
-        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(30))
-        source.updateLiveSession(OuraLiveSelection(true, true))
-        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(150))
-        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(30))
-        assertFalse(source.liveSession.value.active)
+        assertEquals(4, sent.count { it == "acm_start" })
+        assertEquals(0, sent.count { it == "acm_stop" })
+        source.stopLiveSession(); drain(queue)
+        val starts = sent.count { it == "acm_start" }
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMinutes(2)); drain(queue)
+        assertEquals(starts, sent.count { it == "acm_start" })
+        assertEquals(1, sent.count { it == "acm_stop" })
+        source.stop()
+    }
+    @Test fun retainedMotionSelectionSpamCannotAccelerateRenewal() {
+        ready()
+        val sent = mutableListOf<String>()
+        val queue = attachQueue(sent = sent)
+        source.startLiveSession(OuraLiveSelection(motion = true)); settle(); drain(queue)
+        notification(0x33,8,50,7,1,0,2,0,3,0)
+        val started = source.liveSession.value.startedAtElapsedMs
+        repeat(200) { source.updateLiveSession(OuraLiveSelection(hr = it % 2 == 0, motion = true)) }
+        settle(); drain(queue)
+        assertEquals(1, sent.count { it == "acm_start" })
+        assertFalse(sent.contains("acm_stop"))
+        assertEquals(started, source.liveSession.value.startedAtElapsedMs)
+        assertEquals(1, source.liveSession.value.motion.samples.size)
+        source.stop()
+    }
+    @Test fun highRatePacketsPersistOncePerReceiptSecondRatherThanPerVector() {
+        ready()
+        source.startLiveSession(OuraLiveSelection(motion = true)); settle()
+        repeat(100) { notification(0x33,14,50,it,1,0,2,0,3,0,255,255,0,128,255,127) }
+        assertTrue(persisted.isEmpty())
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(2))
+        val rows = persisted.flatMap { it.events }.filter { it.kind == "OURA_LIVE_MOTION" }
+        assertEquals(1, rows.size)
+        val json = org.json.JSONObject(rows.single().payloadJSON)
+        assertEquals(200L, json.getLong("count"))
+        assertEquals(0L, json.getLong("sum_x"))
+        source.stopLiveSession()
+        assertEquals(1, persisted.flatMap { it.events }.count { it.kind == "OURA_LIVE_MOTION" })
+        source.stop()
+    }
+    @Test fun liveMotionFlushesPartialOnStopWithReceiptTimeAndCount() {
+        ready()
+        source.startLiveSession(OuraLiveSelection(motion = true)); settle()
+        notification(0x33,14,50,7,1,0,2,0,3,0,255,255,0,128,255,127)
+        source.stopLiveSession()
+        val rows = persisted.flatMap { it.events }.filter { it.kind == "OURA_LIVE_MOTION" }
+        assertEquals(1, rows.size)
+        val json = org.json.JSONObject(rows.single().payloadJSON)
+        assertEquals(2, json.getLong("count"))
+        assertEquals(0, json.getLong("sum_x"))
+        assertEquals(-32768, json.getInt("min_y"))
+        assertEquals("host_receipt", json.getString("provenance"))
+        assertEquals(rows.single().ts, json.getLong("first_receipt_ms") / 1000)
+        assertTrue(persisted.flatMap { it.hr }.isEmpty())
+        source.stop()
     }
     @Test fun startsRequireAuthenticationAndRestartDoesNotRestoreOldDemand() {
         source.startLiveSession(OuraLiveSelection(true,true))
@@ -220,7 +277,7 @@ class OuraExplicitSessionSourceTest {
         assertEquals(OuraHistorySyncPhase.SYNCING, source.historySyncPhase.value)
     }
 
-    @Test fun rapidUiIntentsCannotResetSamplesOrRenewOriginalDeadline() {
+    @Test fun rapidUiIntentsCannotResetSamplesOrSessionStart() {
         ready()
         source.startLiveSession(OuraLiveSelection(true,true))
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(150))

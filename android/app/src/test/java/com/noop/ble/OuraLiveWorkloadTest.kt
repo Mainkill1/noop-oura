@@ -62,18 +62,6 @@ class OuraLiveWorkloadTest {
         assertFalse(work.acceptsSamples(old))
     }
 
-    @Test fun stopStartCannotRenewMotionUntilShutdownActuallyCompletes() {
-        val work = OuraLiveWorkload()
-        assertEquals(60_000L, work.armMotionDeadline(0))
-        work.stop()
-        work.start(OuraLiveSelection(motion = true))
-        assertEquals(60_000L, work.armMotionDeadline(10_000))
-        work.motionShutdownCompleted(sessionActive = true)
-        assertEquals(60_000L, work.armMotionDeadline(20_000))
-        work.motionShutdownCompleted(sessionActive = false)
-        assertEquals(90_000L, work.armMotionDeadline(30_000))
-    }
-
     @Test fun eachSourceIncarnationHasAnIndependentOwnershipNamespace() {
         val firstA = OuraLiveWorkload()
         val otherB = OuraLiveWorkload()

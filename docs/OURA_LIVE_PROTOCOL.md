@@ -1,8 +1,9 @@
-# Oura explicit live-session wire contract
+# Oura live-session wire and storage contract
 
 This is raw instrumentation in the default-off Experimental Oura client. It does not
 calibrate acceleration, feed scoring, infer ring timestamps, or claim combined
-HR/ACM capacity. Hardware validation is pending. New reversible command coordination
+HR/ACM capacity. A target Gen5 capture produced valid 14-byte motion bodies at approximately
+49 vectors/second; continuous renewal and lifecycle acceptance still require hardware verification. New reversible command coordination
 is recorded in PR #1 because this fork disables issues.
 
 ## Provenance and scope
@@ -23,21 +24,25 @@ Public documentation consulted on 2026-10-14:
 
 ## Reversible commands
 
-Explicit Start requests one minute, with no delayed start:
+Each wire Start requests one minute, with no delayed start:
 `06 07 20 00 00 00 01 00 00`. After outer tag and length, the body is
 mask:u32LE, durationMinutes:u16LE, delay:u8. No RData/flash collection is started.
 
 Stop clears the realtime mask: `06 04 00 00 00 00`. It runs on explicit Stop,
 background/leave, teardown, and after authentication to clear a previous process's
-residual realtime state. Local motion sessions stop after one minute; they never
-renew silently. Link loss/process kill cannot guarantee delivery of OFF.
+residual realtime state. While current foreground page demand remains active, the central
+serialized queue renews the finite lease after 50 seconds from actual write submission.
+At most one renewal can be pending or outstanding; UI calls cannot accelerate it.
+Queue congestion can delay renewal past ring expiry, leaving a gap; finite duration
+remains the crash/lost-OFF safety. Duration zero is not used. Link loss/process kill
+cannot guarantee delivery of OFF.
 
 Response `07 01 <status>`: zero means accepted; nonzero means rejected.
 Neither status advances the receiving phase without valid samples.
 
 Existing HR Start uses `2f 03 22 02 03`, `2f 03 26 02 02`;
 Stop uses `2f 03 22 02 00`, `2f 03 26 02 00` (OURA_PROTOCOL §5.6).
-HR keepalive only runs during explicitly requested HR sessions.
+HR keepalive only runs while HR is selected by the active page demand.
 
 ## Notification contract
 
@@ -47,9 +52,10 @@ are X/Y/Z signed16 LE. Bytes 8..13, if present, are a second XYZ sample. Preserv
 order, signed extrema, opaque metadata, and sequence. No guessed sample spacing,
 Hz field, orientation transform, or g conversion. Timestamp both samples at host
 monotonic receipt and retain their sample indices. Observed throughput comes from
-actual received samples. Historical 0x47 summaries never enter these buffers. Raw live XYZ is memory-only and is
-retained after Stop for inspection, and cleared on next Start or source teardown; it is not saved into the second-resolution OURA_MOTION summary
-schema. Existing HR persistence and ring-banked movement history continue separately.
+actual received samples. Historical 0x47 summaries never enter these buffers. Raw vectors
+remain in bounded rolling session memory (60 seconds / 6,000 vectors). All accepted
+vectors also contribute to one-second persistent summaries, described below. Existing
+HR persistence and ring-banked movement history continue separately.
 
 Oura's TLV protocol has no documented inbound CRC; exact envelope lengths and
 supported body lengths gate this path. Unknown/truncated/extra bytes are rejected.
@@ -60,7 +66,7 @@ and history yielding/resuming. Receipt-to-display under 250 ms remains unmeasure
 
 ## Workload ownership
 
-UI Start/Update/Stop calls set one desired selection in `OuraLiveWorkload`. A single
+UI visibility/selection intents use Start/Update/Stop to set one desired selection in `OuraLiveWorkload`. A single
 main-loop worker reconciles it at a fixed 150 ms settling interval; repeated Start
 is idempotent and Stop cancels pending work immediately. Removed channels invalidate
 pending enables as soon as their intent is accepted. The serialized queue preserves
@@ -73,7 +79,7 @@ opaque token with a process-unique source-incarnation namespace, so recreating t
 same registry source does not reuse ownership. Requests carry the expected source
 id and generation; the pre-Start generation remains an owner alias until Stop, so
 immediate screen disposal can cancel a pending Start safely. Selection changes
-retain the first motion deadline; they never silently extend or recreate a session.
+retain session buffers, watchdog state and lease timing; they do not recreate a session.
 History finishes its current page, flushes progress at its quiet boundary, then yields.
 It resumes from the durable cursor only after live OFF writes complete locally,
 through a current-queue and generation-checked completion barrier. A pending Start
@@ -81,7 +87,60 @@ cancels that resume. No pause opcode is sent.
 
 Each requested channel gets ten seconds for its first sample. A silent channel is
 marked unavailable and disabled once without automatic retry; the other channel
-continues independently. A new explicit session clears the failure state.
-Rapid Stop/Start retains the original motion deadline until the serialized OFF write
-completes locally. This is local queue completion evidence, not a ring-side delivery
-guarantee. Session status remains grounded in actual samples.
+continues independently. A new session clears the failure state.
+Stop/Start preserves queued OFF ordering before a new Start. Local write completion
+is not a ring-side delivery guarantee. Session status remains grounded in actual samples.
+
+## Persisted host motion
+
+`OURA_LIVE_MOTION` uses the existing event key `(deviceId, ts, kind)`, with `ts` in
+Unix seconds. It is distinct from `OURA_MOTION` (ring-banked signed-byte ×8 motion).
+The payload contains `count`, `sum_x/y/z`, `min_x/y/z`, `max_x/y/z`,
+`first_receipt_ms`, `last_receipt_ms`, `provenance="host_receipt"`, and
+`units="raw_signed16"`. Means are sums divided by actual vector count; two vectors
+in one packet count twice. First/last information describes receipt times, not
+inferred sample spacing or ring time. The source anchors wall-clock epoch milliseconds
+and monotonic elapsed time once per session; each notification's captured monotonic
+receipt maps through that anchor, so later wall-clock adjustments do not retime it.
+
+One bounded accumulator holds the current second. A later second, the periodic
+worker, Stop, backgrounding or teardown flushes it through the existing persistence
+sink. Each contribution is submitted once. Partial sessions sharing a second merge
+count/sums/extrema and receipt bounds inside the database transaction on both platforms;
+concurrent contributions cannot overwrite one another. These are additive contributions,
+not replay-idempotent historical rows. Host motion does not advance the ring-history cursor.
+No migration or deletion of existing records is required.
+
+`OuraDashboardData.liveMotionSeconds` exposes the most recent 120 summaries for
+inspection; storage keeps every collected second. Separate graph ids are
+`live_motion_x/y/z` (per-second means), `live_motion_x/y/z_min`,
+`live_motion_x/y/z_max`, and `live_motion_count`. Their raw signed16 units cannot be
+compared with the old `motion_x/y/z` metrics as a shared calibration.
+
+## Offline capture replay
+
+The platform-pure CLI prints canonical finite Start/OFF bytes without reading stdin:
+
+```sh
+swift run --package-path Packages/OuraProtocol oura-decode --live-motion-commands
+# acm_start 060720000000010000
+# acm_stop 060400000000
+```
+
+No command is sent; this executable has no BLE transport. Captured notifications can
+be decoded as text or JSON:
+
+```sh
+swift run --package-path Packages/OuraProtocol oura-decode --live-motion --json --hex 330831fe0080ff7fffff
+swift run --package-path Packages/OuraProtocol oura-decode --live-motion capture.json
+```
+
+A capture is an array of `{"hex":"...","ts_ms":...}` objects (`ts_ms` is optional
+provenance). Entire notification framing is checked before any live vector is emitted.
+Opaque metadata and sequence stay raw; no sampling-rate or calibration interpretation
+is applied. Existing historical record decoding remains available without `--live-motion`.
+
+Timed JSON captures can be decimated offline with `--live-motion-summary [FILE]`.
+This exports the same canonical count/sums/extrema/receipt payload plus `ts` and
+`mean_x/y/z`. Every input notification must carry its actual host-receipt `ts_ms`;
+missing timestamps are an error, so hex-only samples never acquire fabricated times.

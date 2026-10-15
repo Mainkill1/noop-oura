@@ -37,9 +37,11 @@ public enum OuraCommands {
     public static let featureCvaPpg: UInt8 = 0x0D
 
     /// One-minute raw ACM request. Explicit OFF is mandatory; see OURA_LIVE_PROTOCOL.md.
+    // Kotlin twin: `OuraCommands.liveMotionStart`.
     public static func liveMotionStart() -> OuraCommand { OuraCommand(label: "acm_start", bytes: [0x06, 0x07, 0x20, 0, 0, 0, 1, 0, 0]) }
 
     /// Clear the realtime mask without clearing any stored history.
+    // Kotlin twin: `OuraCommands.liveMotionStop`.
     public static func liveMotionStop() -> OuraCommand { OuraCommand(label: "acm_stop", bytes: [0x06, 0x04, 0, 0, 0, 0]) }
 
     // MARK: - Pre-auth / identity (unauthenticated OK)

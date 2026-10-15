@@ -6,6 +6,30 @@ import org.junit.Test
 
 /** Android accepts only one outstanding characteristic write, including WRITE_TYPE_NO_RESPONSE. */
 class OuraWriteQueueTest {
+    @Test fun delayedRenewalIsSingleAndCancelledBeforeStopBarrier() {
+        var now = 0L
+        val sent = mutableListOf<String>()
+        val queue = OuraWriteQueue(submit = { sent.add(it.label); true }, elapsedMs = { now })
+        queue.reconcileLive(OuraLiveSelection(motion = true), true)
+        now = 70_000
+        repeat(200) { queue.renewMotionLease() }
+        assertEquals(listOf("acm_start"), sent) // initial write still outstanding
+        queue.complete(true)
+        queue.enqueue(command("get_battery"))
+        repeat(200) { queue.renewMotionLease() }
+        queue.reconcileLive(OuraLiveSelection(), false)
+        var stopped = false
+        queue.whenLiveStopped { stopped = true }
+        queue.complete(true)
+        assertEquals(listOf("acm_start", "get_battery", "acm_stop"), sent)
+        assertFalse(stopped)
+        queue.complete(true)
+        assertTrue(stopped)
+        now += 120_000
+        queue.renewMotionLease()
+        assertEquals(1, sent.count { it == "acm_start" })
+    }
+
     private fun command(label: String) = OuraCommand(label, intArrayOf(1))
 
     @Test fun startupBurstDeliversNonceHistoryAndStatusReadsWithoutBusyDrops() {

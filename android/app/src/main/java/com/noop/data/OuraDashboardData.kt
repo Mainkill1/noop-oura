@@ -18,6 +18,7 @@ data class OuraDashboardData(
     val signals: Map<String, SignalDecimation.Summary> = emptyMap(),
     val sleeps: List<SleepSession> = emptyList(),
     val motionWindows: List<OuraMotionWindow> = emptyList(),
+    val liveMotionSeconds: List<OuraLiveMotionHistory> = emptyList(),
 ) {
     companion object {
         val importedKeys = listOf("rhr", "hrv", "spo2", "resp_rate", "skin_temp_dev_c", "steps", "energy_kcal",
@@ -29,6 +30,7 @@ data class OuraDashboardData(
                          from: Long, to: Long, bucketSeconds: Long): OuraDashboardData = withContext(Dispatchers.Default) {
             val signals = linkedMapOf<String, SignalDecimation.Summary>()
             val recentMotion = java.util.ArrayDeque<OuraMotionWindow>()
+            val recentLiveMotion = java.util.ArrayDeque<OuraLiveMotionHistory>()
             val limit = 200_001
             fun <T> checked(rows: List<T>): List<T> {
                 check(rows.size < limit) { "Oura read limit reached" }
@@ -75,6 +77,21 @@ data class OuraDashboardData(
                         val value = runCatching { JSONObject(it.payloadJSON).optDouble("rmssd_ms", Double.NaN) }.getOrDefault(Double.NaN)
                         if (value > 0) SignalDecimation.Sample(it.ts, value) else null
                     }
+                    val liveMotion = events.filter { it.kind == com.noop.oura.OuraLiveMotionSummary.EVENT_KIND }
+                        .mapNotNull { OuraLiveMotionHistory.parse(it.ts, it.payloadJSON) }
+                    val liveSignals = linkedMapOf<String, MutableList<SignalDecimation.Sample>>()
+                    for (record in liveMotion) {
+                        recentLiveMotion.addLast(record)
+                        if (recentLiveMotion.size > 120) recentLiveMotion.removeFirst()
+                        fun add(key: String, value: Double) { liveSignals.getOrPut(key) { mutableListOf() }.add(SignalDecimation.Sample(record.ts, value)) }
+                        add("live_motion_count", record.count.toDouble())
+                        for (axis in listOf("x", "y", "z")) {
+                            add("live_motion_$axis", record.mean(axis))
+                            add("live_motion_${axis}_min", record.min(axis).toDouble())
+                            add("live_motion_${axis}_max", record.max(axis).toDouble())
+                        }
+                    }
+                    raw.putAll(liveSignals)
                     val motion = events.filter { it.kind == OuraStreamMapping.EVENT_MOTION }
                         .mapNotNull { OuraMotionWindow.parse(it.ts, it.payloadJSON) }
                     for (record in motion) {
@@ -94,7 +111,7 @@ data class OuraDashboardData(
             }
             val sleeps = repo.sleepSessionsForDevice(source.id, from - 172_800, to - 1, 2001)
             check(sleeps.size < 2001) { "Oura sleep read limit reached" }
-            OuraDashboardData(signals, sleeps.filter { it.endTs >= from && it.endTs < to }.sortedByDescending { it.endTs }, recentMotion.toList().asReversed())
+            OuraDashboardData(signals, sleeps.filter { it.endTs >= from && it.endTs < to }.sortedByDescending { it.endTs }, recentMotion.toList().asReversed(), recentLiveMotion.toList().asReversed())
         }
 
         private fun dailyValue(row: DailyMetric, key: String): Double? = when (key) {

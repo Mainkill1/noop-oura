@@ -9,6 +9,7 @@ internal class OuraWriteQueue(
     private val onStarted: (OuraCommand) -> Unit = {},
     private val onFinished: () -> Unit = {},
     private val onCompleted: (OuraCommand) -> Unit = {},
+    private val elapsedMs: () -> Long = { System.nanoTime() / 1_000_000L },
     private val onFailure: (OuraCommand, Failure) -> Unit = { _, _ -> },
 ) {
     enum class Failure { REJECTED, COMPLETION_FAILED, TIMED_OUT }
@@ -22,6 +23,16 @@ internal class OuraWriteQueue(
     private var hrModeMayBeEnabled = false
     private var hrSubscriptionMayBeEnabled = false
     private var motionMayBeEnabled = false
+    private var motionLeaseStartedMs: Long? = null
+
+    /** One renewal at most; selection reconciliation cancels a queued renewal before OFF. */
+    @Synchronized fun renewMotionLease() {
+        val started = motionLeaseStartedMs ?: return
+        if (closed || finishing || liveSelection?.motion != true || !motionMayBeEnabled ||
+            elapsedMs() - started < 50_000L || inFlight?.label == "acm_start" || pending.any { it.label == "acm_start" }) return
+        pending.addLast(OuraCommands.liveMotionStart())
+        pump()
+    }
 
     @Synchronized fun enqueue(command: OuraCommand) {
         if (closed || finishing || obsoleteEnable(command)) return
@@ -78,7 +89,7 @@ internal class OuraWriteQueue(
         when (command.label) {
             "dhr_disable" -> hrModeMayBeEnabled = false
             "dhr_unsubscribe" -> hrSubscriptionMayBeEnabled = false
-            "acm_stop" -> motionMayBeEnabled = false
+            "acm_stop" -> { motionMayBeEnabled = false; motionLeaseStartedMs = null }
         }
         onCompleted(command)
         onFinished()
@@ -125,7 +136,7 @@ internal class OuraWriteQueue(
         when (command.label) {
             "dhr_enable" -> hrModeMayBeEnabled = true
             "dhr_subscribe" -> hrSubscriptionMayBeEnabled = true
-            "acm_start" -> motionMayBeEnabled = true
+            "acm_start" -> { motionMayBeEnabled = true; motionLeaseStartedMs = elapsedMs() }
         }
         onStarted(command)
         val accepted = submit(command)
