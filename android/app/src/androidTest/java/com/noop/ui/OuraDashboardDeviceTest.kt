@@ -214,6 +214,8 @@ class OuraDashboardDeviceTest {
         try {
             restoration.setContent { TestTheme { OuraScreen(vm, {}, {}, {}) } }
             selectExportSource()
+            // Re-open and choose export while the underlying picker already displays the same label.
+            selectExportSource()
             compose.onNodeWithText("30 days").performScrollTo().performClick()
             compose.onNodeWithText("Show ranges").performScrollTo().performClick()
             restoration.emulateSavedInstanceStateRestore()
@@ -244,7 +246,7 @@ class OuraDashboardDeviceTest {
             compose.onAllNodes(hasTestTag("oura-source-picker") and isEnabled()).fetchSemanticsNodes().isNotEmpty()
         }
         compose.onNodeWithTag("oura-source-picker").performScrollTo().assertIsDisplayed().performClick()
-        compose.onNodeWithText("Oura export").performClick()
+        compose.onNode(hasText("Oura export") and hasAnyAncestor(isPopup())).performClick()
         compose.onNodeWithTag("oura-source-picker").assertTextContains("Oura export")
     }
 
