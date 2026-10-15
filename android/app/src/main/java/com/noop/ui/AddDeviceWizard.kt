@@ -411,8 +411,11 @@ fun AddDeviceWizard(
         )
         // The takeover always makes the ring active (it is the user's new live source); no make-active
         // prompt - the destructive gate already committed to "this is now your device".
-        scope.launch { viewModel.registerDevice(device, makeActive = true) }
-        if (closeAfter) onClose()
+        scope.launch {
+            viewModel.registerDevice(device, makeActive = true)
+            // Dismissing cancels this scope; finish saving and activating the ring first.
+            if (closeAfter) onClose()
+        }
     }
 
     // The live adopt-failure reason (the source's needs-pairing message). Collected here so the honest
