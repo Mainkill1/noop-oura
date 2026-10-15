@@ -128,4 +128,58 @@ class OuraRawPollTest {
         assertEquals(1, h.queued.size)
     }
 
+    @Test fun intervalIncreaseAfterCompletionWaitsFromTheCompletionBoundary() {
+        val h = Harness(); h.select(); h.tick(); val c = h.queued.single(); h.poll.started(c)
+        h.now = 100; h.response(); h.poll.completed(c)
+        h.now = 110; h.select(interval = 30000); h.tick()
+        assertEquals(1, h.queued.size)
+        assertEquals(OuraRawPollPhase.PACING, h.poll.snapshot.phase)
+        h.now = 30099; h.tick(); assertEquals(1, h.queued.size)
+        h.now = 30100; h.tick(); assertEquals(2, h.queued.size)
+        h.now = 1000000; repeat(20) { h.tick() }
+        assertEquals(2, h.queued.size) // a delayed timer may issue one request, never a catch-up burst
+    }
+
+    @Test fun intervalDecreaseUsesTheNewIntervalWithoutBypassingTheMinimumCadence() {
+        val h = Harness(); h.select(interval = 30000); h.tick(); val c = h.queued.single(); h.poll.started(c)
+        h.now = 100; h.response(); h.poll.completed(c)
+        h.now = 110; h.select(interval = 250); h.tick()
+        assertEquals(1, h.queued.size)
+        h.now = 349; h.tick(); assertEquals(1, h.queued.size)
+        h.now = 350; h.tick(); assertEquals(2, h.queued.size)
+    }
+
+    @Test fun rapidChannelChangesAndObservingHistoryDoNotEraseCompletionPacing() {
+        val h = Harness(); h.select(interval = 500); h.tick(); val c = h.queued.single(); h.poll.started(c)
+        h.now = 100; h.response(); h.poll.completed(c)
+        for (key in listOf("status:04", "event:8b", "hr", "status:02", "status:0b", "battery")) {
+            h.now += 1; h.select(key, 500); h.tick()
+            assertEquals("channel=$key", 1, h.queued.size)
+        }
+        h.now = 599; h.tick(); assertEquals(1, h.queued.size)
+        h.now = 600; h.tick(); assertEquals(2, h.queued.size)
+    }
+
+    @Test fun completedRequestHideAndReentryRetainPacingUntilTheLatestChosenDeadline() {
+        val h = Harness(); val owner = h.poll.snapshot.generation
+        h.select(); h.tick(); val c = h.queued.single(); h.poll.started(c)
+        h.now = 100; h.response(); h.poll.completed(c)
+        h.now = 110; h.poll.intent(owner, null, 2000, false)
+        h.now = 120; h.select("status:04", 1000); h.tick()
+        assertEquals(1, h.queued.size)
+        h.now = 1099; h.tick(); assertEquals(1, h.queued.size)
+        h.now = 1100; h.tick(); assertEquals(2, h.queued.size)
+    }
+
+    @Test fun newConnectionResetReleasesOnlyThePreviousConnectionsPacingBoundary() {
+        val h = Harness(); h.select(interval = 30000); h.tick(); val c = h.queued.single(); h.poll.started(c)
+        h.now = 100; h.response(); h.poll.completed(c)
+        h.now = 110; h.poll.reset(); h.select(interval = 250); h.tick()
+        assertEquals(2, h.queued.size)
+        h.poll.completed(c) // a stale callback cannot establish pacing in the new connection
+        h.poll.started(h.queued.last()); h.now = 120; h.response(); h.poll.completed(h.queued.last())
+        h.now = 369; h.tick(); assertEquals(2, h.queued.size)
+        h.now = 370; h.tick(); assertEquals(3, h.queued.size)
+    }
+
 }

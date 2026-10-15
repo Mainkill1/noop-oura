@@ -21,7 +21,8 @@ internal class OuraRawPoll(incarnation: Long, private val now: () -> Long,
     private var request: Request? = null
     private var stalled = false
     val hasWork: Boolean get() = !stalled && (active || request != null)
-    private var nextAt = 0L
+    // Connection-scoped pacing survives selection, interval and visible-owner revisions.
+    private var lastCompletionElapsedMs: Long? = null
     fun intent(expectedGeneration: Long, channel: String?, intervalMs: Long, foreground: Boolean) {
         if (expectedGeneration != snapshot.generation && expectedGeneration != ownerAlias) return
         if (!foreground || channel == null) {
@@ -36,7 +37,7 @@ internal class OuraRawPoll(incarnation: Long, private val now: () -> Long,
         }
         val interval = intervalMs.takeIf { it in INTERVALS } ?: 2000L
         if (snapshot.channel != channel || snapshot.intervalMs != interval) {
-            cancelQueued(); nextAt = now() // source worker coalesces UI revisions before calling tick
+            cancelQueued() // source worker coalesces UI revisions before calling tick
         }
         snapshot = snapshot.copy(channel = channel, intervalMs = interval,
             phase = if (stalled) OuraRawPollPhase.STALLED else snapshot.phase)
@@ -52,7 +53,7 @@ internal class OuraRawPoll(incarnation: Long, private val now: () -> Long,
             command(key) == null -> OuraRawPollPhase.OBSERVING
             r != null -> if (r.started == null) OuraRawPollPhase.QUEUED else OuraRawPollPhase.OUTSTANDING
             !ready -> OuraRawPollPhase.WAITING
-            now() < nextAt -> OuraRawPollPhase.PACING
+            lastCompletionElapsedMs?.let { now() - it < snapshot.intervalMs } == true -> OuraRawPollPhase.PACING
             else -> {
                 val cmd = command(key)!!
                 request = Request(cmd, key!!, now(), snapshot.generation)
@@ -93,14 +94,14 @@ internal class OuraRawPoll(incarnation: Long, private val now: () -> Long,
     private fun settle(r: Request) {
         if (r.completed == null || r.response == null) return
         request = null
-        nextAt = maxOf(r.completed!!, r.response!!) + snapshot.intervalMs
+        lastCompletionElapsedMs = maxOf(r.completed!!, r.response!!)
     }
     private fun cancelQueued() {
         val r = request ?: return
         if (r.started == null && cancel(r.command)) request = null
     }
     fun reset() {
-        cancelQueued(); request = null; active = false; ownerAlias = null; stalled = false; nextAt = 0
+        cancelQueued(); request = null; active = false; ownerAlias = null; stalled = false; lastCompletionElapsedMs = null
         snapshot = OuraRawPollSnapshot(generation = snapshot.generation + 1)
     }
     private fun command(key: String?): OuraCommand? = when (key) {
