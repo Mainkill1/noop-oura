@@ -116,8 +116,8 @@ class OuraDriver(
      * session started on exactly the second of such a connect (3–49 min each, ≈ 2 h of a 9 h night).
      * With the flag false the driver goes straight to `Streaming` — authenticated and idle — so the
      * history drain, SyncTime and status reads run as before and no daytime-HR write is made at all.
-     * Read once, at the auth-success step. Twin of the Swift `OuraDriver.liveHRWanted`; Android's
-     * `OuraLiveSource` has no screen-off suspend yet (#1546), so nothing clears it there today.
+     * Read once, at the auth-success step. Twin of Swift `OuraDriver.liveHRWanted`; Android sets
+     * this from explicit Live-view demand, while Swift uses its screen/night stand-down policy.
      */
     var liveHRWanted: Boolean = true
 

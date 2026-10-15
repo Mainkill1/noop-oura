@@ -172,6 +172,12 @@ object OuraCommands {
     fun liveHRUnsubscribe(): OuraCommand =
         OuraCommand("dhr_unsubscribe", intArrayOf(0x2F, 0x03, 0x26, featureDaytimeHR, 0x00))
 
+    /** One-minute raw ACM instrumentation request; explicit OFF is mandatory. OURA_LIVE_PROTOCOL.md. */
+    fun liveMotionStart(): OuraCommand = OuraCommand("acm_start", intArrayOf(0x06, 0x07, 0x20, 0, 0, 0, 1, 0, 0))
+
+    /** Clear realtime measurement mask. Does not clear the ring's stored history. */
+    fun liveMotionStop(): OuraCommand = OuraCommand("acm_stop", intArrayOf(0x06, 0x04, 0, 0, 0, 0))
+
     // Feature-status diagnostics (READ-ONLY; s5.6 / s7.1)
 
     /**

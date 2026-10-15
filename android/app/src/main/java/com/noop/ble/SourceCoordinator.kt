@@ -168,7 +168,27 @@ class SourceCoordinator(
      *  scans / stops it. Built by [makeSource]; each source owns its OWN scanner/GATT and never touches the
      *  WHOOP BLE client, so the WHOOP path cannot regress. (An Oura ring additionally surfaces only its OWN
      *  raw signals + open event tags — NOOP computes its own Charge/Rest — never Oura's encrypted scores.) */
-    private var activeSource: LiveHrSource? = null
+    @Volatile private var activeSource: LiveHrSource? = null
+    private val _ouraLiveSession = MutableStateFlow(OuraLiveSessionSnapshot())
+    val ouraLiveSession: StateFlow<OuraLiveSessionSnapshot> = _ouraLiveSession.asStateFlow()
+    private val _ouraHistorySyncPhase = MutableStateFlow(OuraHistorySyncPhase.IDLE)
+    val ouraHistorySyncPhase: StateFlow<OuraHistorySyncPhase> = _ouraHistorySyncPhase.asStateFlow()
+    fun startOuraLiveSession(selection: OuraLiveSelection, expectedSourceDeviceId: String, expectedGeneration: Long) {
+        if (activeStrapId != expectedSourceDeviceId) return
+        (activeSource as? OuraLiveSource)?.startLiveSession(selection, expectedSourceDeviceId, expectedGeneration)
+    }
+    fun updateOuraLiveSession(selection: OuraLiveSelection, expectedSourceDeviceId: String, expectedGeneration: Long) {
+        if (activeStrapId != expectedSourceDeviceId) return
+        (activeSource as? OuraLiveSource)?.updateLiveSession(selection, expectedSourceDeviceId, expectedGeneration)
+    }
+    fun stopOuraLiveSession(expectedSourceDeviceId: String, expectedGeneration: Long) {
+        if (activeStrapId != expectedSourceDeviceId) return
+        (activeSource as? OuraLiveSource)?.stopLiveSession(expectedSourceDeviceId, expectedGeneration)
+    }
+
+    /** Compatibility for the previous dashboard: it cannot acquire or stop explicit session work. */
+    @Suppress("UNUSED_PARAMETER")
+    fun setOuraDashboardLiveHR(wanted: Boolean?) = Unit
     /** The deviceId the active non-WHOOP source ([activeSource]) runs for. */
     private var activeStrapId: String? = null
     /** The WHOOP registry id we last pointed the connection at, so a WHOOP→WHOOP switch is detected and a
@@ -611,6 +631,8 @@ class SourceCoordinator(
             launch { source.needsPairing.collect { _ouraNeedsPairing.value = it } }
             launch { source.ouraWearState.collect { _ouraWearState.value = it } }
             launch { source.batteryPct.collect { _ouraBatteryPct.value = it } }   // #2075
+            launch { source.liveSession.collect { _ouraLiveSession.value = it } }
+            launch { source.historySyncPhase.collect { _ouraHistorySyncPhase.value = it } }
             launch { source.linkPhase.collect { _ouraLinkPhase.value = it } }     // #2305
         }
         return source
@@ -661,6 +683,8 @@ class SourceCoordinator(
         _ouraNeedsPairing.value = null
         _ouraWearState.value = null   // #628: no live Oura source -> no wear badge
         _ouraBatteryPct.value = null  // #2075: nor a stale ring charge
+        _ouraLiveSession.value = OuraLiveSessionSnapshot()
+        _ouraHistorySyncPhase.value = OuraHistorySyncPhase.IDLE
         _ouraLinkPhase.value = OuraLiveSource.LinkPhase.DISCONNECTED   // #2305
         // A stale speed/cadence/power readout must not outlive the strap session (the source's own stop()
         // already pushes an empty SensorMetrics, but reset here too so leaving for WHOOP / FTMS / Huami —

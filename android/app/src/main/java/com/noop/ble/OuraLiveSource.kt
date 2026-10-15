@@ -1,6 +1,11 @@
 package com.noop.ble
 
 import android.annotation.SuppressLint
+import android.app.Activity
+import android.app.Application
+import android.os.Bundle
+import android.os.SystemClock
+import com.noop.oura.OuraLiveMotion
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothGatt
@@ -482,6 +487,7 @@ class OuraLiveSource(
      * of ours to resolve.
      */
     private var lastWriteAccepted: Boolean? = null
+    private val liveHRDemand = OuraLiveHRDemand()
     @Volatile private var writeSession: WriteSession? = null
     private val retiringWrites = ConcurrentHashMap<BluetoothGatt, WriteSession>()
 
@@ -497,6 +503,9 @@ class OuraLiveSource(
                 handler.postDelayed(task, WRITE_CALLBACK_TIMEOUT_MS)
             },
             onFinished = { cancelTimeout() },
+            onCompleted = { command ->
+                if (command.label == "acm_stop") liveWorkload.motionShutdownCompleted(sessionMemory.snapshot.active)
+            },
             onFailure = { command, reason ->
                 log("Oura: write ${command.label} failed ($reason) - closing this session without replay")
                 handler.post {
@@ -542,9 +551,7 @@ class OuraLiveSource(
     private val reengageRunnable = object : Runnable {
         override fun run() {
             val d = driver ?: return
-            if (d.phase == OuraDriverPhase.Streaming) {
-                for (cmd in d.reengageLiveHRCommands()) write(cmd)
-            }
+            for (cmd in liveHRDemand.keepAlive(wantsLiveHR(), d.phase)) write(cmd)
             // Removal watchdog (#628): if the live-HR stream has gone silent past the grace window while we
             // keep re-engaging it, the ring came off the finger (there is no "removed" event). Downgrades
             // WORN -> OFF; the tracker never overrides CHARGING. Mirrors the iOS re-engage-tick watchdog.
@@ -601,8 +608,8 @@ class OuraLiveSource(
      * their own ring timestamp) until the anchor lands ([drainPendingAnchorEvents]), so they get their real
      * historical time instead of a premature wall-clock guess. The ring's 0x42 time-sync can arrive
      * anywhere in a history-fetch stream, not necessarily first, so records that land before it are parked
-     * here and re-stamped the moment an anchor lands. Drained with an honest wall-clock fallback at teardown
-     * if no anchor ever arrived this session (never silently dropped). Reset on stop/disconnect. Kotlin twin
+     * here and re-stamped the moment an anchor lands. Unresolved rows stay pending; a new connection
+     * may re-fetch them because the cursor never advances over an unresolved history row. Kotlin twin
      * of Swift's `pendingAnchorEvents`.
      */
     private val pendingAnchorEvents = ArrayList<Pair<OuraEvent, Long>>()
@@ -654,6 +661,7 @@ class OuraLiveSource(
      * the same reason. Re-requesting mid-stream at a stale cursor restarts the ring's serve.
      */
     private var pendingContinuation = false
+    private var pendingDrainFinish: Pair<Boolean, Boolean>? = null
     private val batchQuietMs = 1_500L
     private val batchQuietRunnable = Runnable { continueDrainAfterQuiet() }
 
@@ -712,6 +720,13 @@ class OuraLiveSource(
     private fun fetchHistoryIfIdle(): Unit = guardedCallback("history-fetch") {
         val d = driver ?: return@guardedCallback
         if (d.phase != OuraDriverPhase.Streaming) return@guardedCallback
+        if (sessionMemory.snapshot.active) {
+            historyPausedForLive = true
+            _historySyncPhase.value = OuraHistorySyncPhase.PAUSED_FOR_LIVE
+            return@guardedCallback
+        }
+        _historySyncPhase.value = OuraHistorySyncPhase.SYNCING
+        pendingDrainFinish = null
         // Arm the per-drain state: where we sought from (reboot detection), the seen/stored high-water
         // marks, and the stall/deadline guards.
         resumeCursorAtFetchStart = historyCursor
@@ -757,7 +772,10 @@ class OuraLiveSource(
             // A deadline stop with more data behind it is resumable backlog (progress banked); a STALL
             // stop is the ring looping and must not chain.
             val deadlineBacklog = summary.moreData && elapsed > OuraHistoryDrain.MAX_DRAIN_SECONDS
-            finishDrain(completed = !summary.moreData, resumeBacklog = deadlineBacklog)
+            pendingDrainFinish = !summary.moreData to deadlineBacklog
+            pendingContinuation = true
+            handler.removeCallbacks(batchQuietRunnable)
+            handler.postDelayed(batchQuietRunnable, batchQuietMs)
             return@guardedCallback
         }
         // More data behind this batch. Do NOT re-request yet: the ring emits the 0x11 summary EARLY
@@ -779,6 +797,17 @@ class OuraLiveSource(
         pendingContinuation = false
         val d = driver ?: return@guardedCallback
         if (d.phase != OuraDriverPhase.FetchingHistory) return@guardedCallback
+        val finishing = pendingDrainFinish
+        pendingDrainFinish = null
+        if (finishing != null) {
+            finishDrain(finishing.first, finishing.second)
+            return@guardedCallback
+        }
+        if (sessionMemory.snapshot.active) {
+            log("Oura: history yielded at completed page boundary for live session")
+            finishDrain(completed = false, resumeBacklog = false)
+            return@guardedCallback
+        }
         val next = drain.continuationCursor(lastRequestCursor)
         if (next != null) {
             lastRequestCursor = next
@@ -809,6 +838,12 @@ class OuraLiveSource(
         // two lines after "not a reboot (#2097)" and burn a chained pass that only re-read the kept cursor.
         val rebootFullPullPending = commitResumeCursor(completed)
         advance(OuraTransition.HistoryCursorAdvanced(cursor = historyCursor, moreData = false))
+        if (sessionMemory.snapshot.active) {
+            historyPausedForLive = true
+            _historySyncPhase.value = OuraHistorySyncPhase.PAUSED_FOR_LIVE
+            return
+        }
+        _historySyncPhase.value = OuraHistorySyncPhase.IDLE
         if (rebootFullPullPending || resumeBacklog) {
             if (chainedDrainPasses >= MAX_CHAINED_DRAIN_PASSES) {
                 log("Oura: drain pass cap ($MAX_CHAINED_DRAIN_PASSES) reached with work remaining - " +
@@ -881,11 +916,16 @@ class OuraLiveSource(
      * full re-pull pending for [finishDrain] to chain. A stale replay the judge rejected returns `false`.
      */
     private fun commitResumeCursor(drainCompleted: Boolean): Boolean {
+        // Hand every buffered record to the existing persistence pipeline before saving its cursor.
+        // Repository insertion is asynchronous; this is buffer ordering, not a crash-durability ACK.
+        flush()
         val how = if (drainCompleted) "caught up (bytes_left 0)" else "stopped early"
         val resolves = drain.maxStoredRingTime > 0 &&
             driver?.unixSeconds(forRingTimestamp = drain.maxStoredRingTime) != null
         val anchorConfirmsContinuity = drain.sawPreResumeData && syncAnchorsConfirmContinuity()
-        val newCursor = drain.resumeCursorAtDrainEnd(historyCursor, resolves, anchorConfirmsContinuity)
+        val proposedCursor = drain.resumeCursorAtDrainEnd(historyCursor, resolves, anchorConfirmsContinuity)
+        val unresolvedBeforeCursor = pendingAnchorEvents.any { (event, rt) -> event !is OuraEvent.Ibi && rt <= proposedCursor }
+        val newCursor = if (unresolvedBeforeCursor) historyCursor else proposedCursor
         if (drain.sawPreResumeData && !anchorConfirmsContinuity) {
             log("Oura: history $how but the ring served data older than cursor $resumeCursorAtFetchStart" +
                 " - clock reset/seek ignored; next connect does a full pull")
@@ -1269,10 +1309,18 @@ class OuraLiveSource(
         log("Oura: connecting to ${device.address}")
         _linkPhase.value = LinkPhase.CONNECTING
         // Tear down any prior link first so we never run two GATTs for this source.
+        invalidateLiveWorkload()
+        endLiveSession("connection restart", resumeHistory = false)
         val previousGatt = gatt
+        val previousWrites = writeSession
+        val shutdown = shutdownCommands()
         gatt = null
-        closeWriteQueue()
-        previousGatt?.let { runCatching { it.disconnect(); it.close() } }
+        writeSession = null
+        if (previousGatt != null && previousWrites?.link === previousGatt && shutdown.isNotEmpty()) {
+            retiringWrites[previousGatt] = previousWrites
+            previousWrites.retire(shutdown)
+        } else previousWrites?.close()
+        if (previousGatt != null && !retiringWrites.containsKey(previousGatt)) runCatching { previousGatt.disconnect(); previousGatt.close() }
         // A fresh driver per connection: the app key is session-scoped (the proof handshake re-runs on
         // every connection), and a key provisioned since the last attempt is picked up here. allowKeyInstall
         // is wired straight from the connection's adoptIntent so the dangerous 0x24 write is reachable ONLY
@@ -1297,6 +1345,12 @@ class OuraLiveSource(
         resetWear()   // #628: fresh session — clear any stale worn/charging badge
         // A fresh session: reset the one-shot streaming/anchor state, and never replay a stale-anchor guess.
         reachedStreaming = false
+        liveHRDemand.reset()
+        motionNeedsShutdown = false
+        motionArmed = false
+        liveWorkload.resetMotionBudget()
+        historyPausedForLive = false
+        _historySyncPhase.value = OuraHistorySyncPhase.IDLE
         clearAuthWatchdog()   // a fresh session starts with a clean escalation count
         authEscalations = 0
         authToggleCccdPending = 0
@@ -1359,6 +1413,10 @@ class OuraLiveSource(
 
     /** Tear down: cancel the connection and stop scanning, persisting anything still buffered. Idempotent. */
     override fun stop() = onGattThread("stop") {
+        invalidateLiveWorkload()
+        endLiveSession("source teardown", resumeHistory = false)
+        historyPausedForLive = false
+        _historySyncPhase.value = OuraHistorySyncPhase.IDLE
         // A deliberate teardown (device switch / removal) must NOT auto-reconnect: mark it intentional and
         // drop the reconnect target so any pending backoff bails and no fresh one is scheduled (#912). Remove
         // any already-posted reconnect from the main-looper handler too, so it isn't retained for the full
@@ -1378,7 +1436,7 @@ class OuraLiveSource(
         pendingContinuation = false
         chainedDrainPasses = 0
         // Drain BEFORE driver.stop() clears its anchor, so a pending event still gets a real anchored time
-        // if one exists rather than always falling back to wall-clock at teardown (mirrors Swift's stop()).
+        // if one exists without guessing a wall-clock time at teardown (mirrors Swift's stop()).
         // Same for a hypnogram burst still accumulating (e.g. the session ended mid-drain); one that never
         // anchored is dropped honestly — the cursor did not advance, so it re-arrives next drain.
         hypnogramAssembler.flush()?.let { persistHypnogramBurst(it) }
@@ -1391,12 +1449,12 @@ class OuraLiveSource(
         // left in mode 0x01 kept pushing green 0x80 all night, and the ring's ~20 s auto-revert never
         // fired. A teardown that only cancels the timer therefore hands back a ring still in daytime
         // mode, blocking its own sleep suite. Send the same disable + unsubscribe pair before the link
-        // goes, and BEFORE driver.stop() so the phase check below still sees Streaming.
+        // goes. Retain it through a history fetch or an already queued disable, since either can still
+        // have an enabled command on the controller.
         //
         // Allow the existing shutdown pair to complete locally before disconnecting, bounded at 1.5 s.
         // A process kill or unavailable radio still cannot guarantee delivery to the ring.
-        val shutdown = if (driver?.phase == OuraDriverPhase.Streaming)
-            listOf(OuraCommands.liveHRDisable(), OuraCommands.liveHRUnsubscribe()) else emptyList()
+        val shutdown = shutdownCommands()
         driver?.stop()
         val previousGatt = gatt
         val previousWrites = writeSession
@@ -1421,6 +1479,7 @@ class OuraLiveSource(
         loggedFeatureStatuses.clear()
         loggedProductInfo.clear()
         reachedStreaming = false
+        liveHRDemand.reset()
         clearAuthWatchdog()
         authToggleCccdPending = 0
         // A stop MID-install is an honest failure (no ack will come); a stop after streaming leaves the
@@ -1465,7 +1524,7 @@ class OuraLiveSource(
             val streams = OuraStreamMapping.streams(batch.events) { batch.ts }
             val out = StreamPersistence.toBatch(streams)
             if (out.hr.isNotEmpty() || out.rr.isNotEmpty() || out.spo2.isNotEmpty() ||
-                out.skinTemp.isNotEmpty() || out.events.isNotEmpty() || out.battery.isNotEmpty()
+                out.skinTemp.isNotEmpty() || out.resp.isNotEmpty() || out.events.isNotEmpty() || out.battery.isNotEmpty()
             ) {
                 persist(out, deviceId)
             }
@@ -1474,22 +1533,27 @@ class OuraLiveSource(
 
     /**
      * Flush every event parked in [pendingAnchorEvents], now that `driver.unixSeconds` can resolve them
-     * (called right after the anchor is set) - OR, if called at session teardown with NO anchor ever having
-     * arrived, with an honest wall-clock fallback (a rough stamp beats silently dropping real decoded
-     * samples). Reset the buffer afterward so nothing is drained twice. Kotlin twin of Swift's
+     * (called right after the anchor is set). Unresolved records remain pending without guessed times;
+     * the durable cursor cannot pass them, so a later connection can re-fetch them. Kotlin twin of Swift's
      * `drainPendingAnchorEvents`.
      */
     private fun drainPendingAnchorEvents(): Unit = guardedCallback("drain-pending") {
         if (pendingAnchorEvents.isEmpty()) return@guardedCallback
         val d = driver ?: return@guardedCallback
-        val now = (System.currentTimeMillis() / 1000L).toInt()
-        // Batched by resolved second, exactly like the live path (#1072): a record's parked beats are
-        // released as ONE persist so `ord` records their emission order instead of restarting at 0 per beat.
-        val stamped = pendingAnchorEvents.map { (event, ringTimestamp) ->
-            event to (d.unixSeconds(forRingTimestamp = ringTimestamp)?.toInt() ?: now)
+        val unresolved = ArrayList<Pair<OuraEvent, Long>>()
+        val stamped = pendingAnchorEvents.mapNotNull { (event, ringTimestamp) ->
+            val anchored = d.unixSeconds(forRingTimestamp = ringTimestamp)
+            if (anchored == null) {
+                unresolved.add(event to ringTimestamp)
+                null
+            } else {
+                if (event !is OuraEvent.Ibi) drain.noteStoredRingTime(ringTimestamp, resumeCursorAtFetchStart)
+                event to anchored.toInt()
+            }
         }
         for ((ts, batch) in OuraStreamMapping.batched(stamped)) enqueue(batch, ts)
         pendingAnchorEvents.clear()
+        pendingAnchorEvents.addAll(unresolved)
     }
 
     // MARK: - Scan callback
@@ -1552,6 +1616,10 @@ class OuraLiveSource(
                     g.discoverServices()
                 }
                 BluetoothProfile.STATE_DISCONNECTED -> {
+                    invalidateLiveWorkload()
+                    endLiveSession("link disconnected", resumeHistory = false)
+                    historyPausedForLive = false
+                    _historySyncPhase.value = OuraHistorySyncPhase.IDLE
                     closeWriteQueue()
                     log("Oura: disconnected (status=$status)")
                     _linkPhase.value = LinkPhase.DISCONNECTED
@@ -1566,8 +1634,8 @@ class OuraLiveSource(
                     handler.removeCallbacks(chainedDrainRunnable)
                     pendingContinuation = false
                     // Drain BEFORE the driver's anchor is gone (same reasoning as stop()): a pending event
-                    // still gets a real anchored time if the current session set one, else an honest
-                    // wall-clock fallback rather than being silently dropped. A hypnogram burst still
+                    // still gets a real anchored time if the current session set one, otherwise unresolved
+                    // records stay pending and the cursor leaves them available for retry. A hypnogram burst still
                     // accumulating flushes first for the same reason; unanchored ones drop honestly.
                     hypnogramAssembler.flush()?.let { persistHypnogramBurst(it) }
                     drainPendingAnchorEvents()
@@ -1582,6 +1650,7 @@ class OuraLiveSource(
         loggedFeatureStatuses.clear()
         loggedProductInfo.clear()
                     reachedStreaming = false
+                    liveHRDemand.reset()
                     // A disconnect MID-install is an honest failure (no 0x25 ack will arrive); a disconnect
                     // after streaming leaves the completed Streaming outcome intact. Drop any in-flight key
                     // WITHOUT persisting it (a failed install must never leave a wrongly-trusted key).
@@ -1691,8 +1760,11 @@ class OuraLiveSource(
             ch: BluetoothGattCharacteristic,
             value: ByteArray,
         ) {
+            val receivedAt = SystemClock.elapsedRealtime()
+            val generation = liveWorkload.generation
+            val snapshot = value.copyOf()
             onGattThread("characteristic-changed") {
-                if (g === gatt && ch.uuid == NOTIFY_UUID) handleNotification(value)
+                if (g === gatt && ch.uuid == NOTIFY_UUID) handleNotification(snapshot, generation, receivedAt)
             }
         }
 
@@ -1701,8 +1773,11 @@ class OuraLiveSource(
         @Suppress("DEPRECATION")
         override fun onCharacteristicChanged(g: BluetoothGatt, ch: BluetoothGattCharacteristic) {
             val value = ch.value?.copyOf() ?: return
+            val receivedAt = SystemClock.elapsedRealtime()
+            val generation = liveWorkload.generation
+            val snapshot = value.copyOf()
             onGattThread("characteristic-changed") {
-                if (g === gatt && ch.uuid == NOTIFY_UUID) handleNotification(value)
+                if (g === gatt && ch.uuid == NOTIFY_UUID) handleNotification(snapshot, generation, receivedAt)
             }
         }
     }
@@ -1771,8 +1846,8 @@ class OuraLiveSource(
                     // The OK ack already persisted the key; nothing is left in flight.
                     _adoptPhase.value = AdoptPhase.Streaming
                     pendingInstallKey = null
-                    log("Oura: live HR enabled - streaming")
-                    scheduleReengage()
+                    log("Oura: authenticated - sensor synchronization ready")
+                    refreshLiveHRRequest()
                     // SyncTime FIRST (s5.4, twin of Swift): sets the ring clock AND its 0x13 response
                     // carries the ring's current clock counter — the deterministic anchor that lets the
                     // whole drain below resolve real times without waiting for a lucky 0x42.
@@ -1885,10 +1960,223 @@ class OuraLiveSource(
         writeSession?.queue?.enqueue(cmd)
     }
 
+    private fun shutdownCommands(): List<OuraCommand> = buildList {
+        if (liveHRDemand.needsShutdown) addAll(listOf(OuraCommands.liveHRDisable(), OuraCommands.liveHRUnsubscribe()))
+        if (motionNeedsShutdown) add(OuraCommands.liveMotionStop())
+    }
+
     private fun closeWriteQueue() {
         val owner = writeSession
         writeSession = null
         owner?.close()
+    }
+
+    private val sessionMemory = OuraLiveSession()
+    private val liveWorkload = OuraLiveWorkload()
+    private var liveWorkScheduled = false
+    private var liveOwnerPreviousGeneration: Long? = null
+    private var liveTransportDirty = false
+    private var hrUnavailable = false
+    private var motionUnavailable = false
+    private var hrRequestedAt: Long? = null
+    private var motionRequestedAt: Long? = null
+    private var liveStopReason = "explicit stop or lifecycle"
+    private val liveWorker = Runnable {
+        liveWorkScheduled = false
+        val change = liveWorkload.drain()
+        if (change == null) {
+            if (liveTransportDirty && sessionMemory.snapshot.active) applyLiveSelection()
+            liveTransportDirty = false
+            return@Runnable
+        }
+        liveTransportDirty = false
+        val selection = change.after
+        if (selection == null) {
+            liveOwnerPreviousGeneration = null
+            endLiveSession(liveStopReason)
+        } else if (reachedStreaming && driver?.phase in setOf(OuraDriverPhase.Streaming, OuraDriverPhase.FetchingHistory)) {
+            if (change.newSession) {
+                if (sessionMemory.snapshot.active) endLiveSession("restart", resumeHistory = false)
+                sessionMemory.start(selection, SystemClock.elapsedRealtime())
+                hrUnavailable = false; motionUnavailable = false
+                hrRequestedAt = null; motionRequestedAt = null
+                motionDeadlineElapsedMs = liveWorkload.unfinishedMotionDeadlineElapsedMs
+                motionDeadlineElapsedMs?.let { deadline ->
+                    handler.postDelayed(liveDeadline, (deadline - SystemClock.elapsedRealtime()).coerceAtLeast(0))
+                }
+                liveMotionPackets = 0; liveMotionSamples = 0
+                log("Oura: explicit live session started (generation=${change.generation}, HR=${selection.hr}, ACM=${selection.motion})")
+                if (!liveLifecycleRegistered) {
+                    (appContext as? Application)?.registerActivityLifecycleCallbacks(liveLifecycle)
+                    liveLifecycleRegistered = true
+                }
+                handler.removeCallbacks(liveTick)
+                handler.post(liveTick)
+            } else sessionMemory.update(selection, SystemClock.elapsedRealtime())
+            applyLiveSelection()
+        }
+    }
+    private fun scheduleLiveWorker() {
+        if (liveWorkScheduled) return
+        liveWorkScheduled = true
+        handler.postDelayed(liveWorker, 150L)
+    }
+    private fun invalidateLiveWorkload() {
+        liveOwnerPreviousGeneration = null
+        liveTransportDirty = false
+        liveWorkload.stop()
+        liveWorkload.drain()
+        handler.removeCallbacks(liveWorker)
+        liveWorkScheduled = false
+    }
+    private val _liveSession = MutableStateFlow(OuraLiveSessionSnapshot())
+    val liveSession: StateFlow<OuraLiveSessionSnapshot> = _liveSession.asStateFlow()
+    private val _historySyncPhase = MutableStateFlow(OuraHistorySyncPhase.IDLE)
+    val historySyncPhase: StateFlow<OuraHistorySyncPhase> = _historySyncPhase.asStateFlow()
+    private var historyPausedForLive = false
+    private var motionArmed = false
+    private var motionNeedsShutdown = false
+    private var motionDeadlineElapsedMs: Long? = null
+    private var liveMotionPackets = 0L
+    private var liveMotionSamples = 0L
+    private var liveLifecycleRegistered = false
+    private val liveDeadline = Runnable {
+        liveStopReason = "one-minute motion deadline"
+        invalidateLiveWorkload()
+        endLiveSession(liveStopReason)
+    }
+    private val liveTick = object : Runnable {
+        override fun run() {
+            if (!sessionMemory.snapshot.active) return
+            val now = SystemClock.elapsedRealtime()
+            val failedHr = !hrUnavailable && hrRequestedAt?.let { now - it >= 10_000L &&
+                (sessionMemory.snapshot.hr.lastReceiptElapsedMs ?: Long.MIN_VALUE) < it } == true
+            val failedMotion = !motionUnavailable && motionRequestedAt?.let { now - it >= 10_000L &&
+                (sessionMemory.snapshot.motion.lastReceiptElapsedMs ?: Long.MIN_VALUE) < it } == true
+            if (failedHr || failedMotion) {
+                hrUnavailable = hrUnavailable || failedHr
+                motionUnavailable = motionUnavailable || failedMotion
+                sessionMemory.unavailable(failedHr, failedMotion, now)
+                log("Oura: no first sample within 10s (HR=$failedHr, ACM=$failedMotion); silent channel disabled without retry")
+                liveTransportDirty = true
+                scheduleLiveWorker()
+            }
+            sessionMemory.tick(now)
+            publishLiveSession()
+            handler.postDelayed(this, 500L)
+        }
+    }
+    private val liveLifecycle = object : Application.ActivityLifecycleCallbacks {
+        override fun onActivityStopped(activity: Activity) { stopLiveSession() }
+        override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {}
+        override fun onActivityStarted(activity: Activity) {}
+        override fun onActivityResumed(activity: Activity) {}
+        override fun onActivityPaused(activity: Activity) {}
+        override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {}
+        override fun onActivityDestroyed(activity: Activity) {}
+    }
+    private fun wantsLiveHR(): Boolean = !hrUnavailable && liveWorkload.acceptsSamples(liveWorkload.generation) &&
+        sessionMemory.snapshot.let { it.active && it.selection.hr }
+    private fun publishLiveSession() {
+        _liveSession.value = sessionMemory.snapshot.copy(sourceDeviceId = deviceId, generation = liveWorkload.generation,
+            motionDeadlineElapsedMs = motionDeadlineElapsedMs)
+    }
+    private fun ownsLiveSession(expectedDeviceId: String, expectedGeneration: Long?): Boolean =
+        expectedDeviceId == deviceId && (expectedGeneration == null || expectedGeneration == liveWorkload.generation ||
+            expectedGeneration == liveOwnerPreviousGeneration)
+
+    /** UI intents update the helper; its budgeted worker owns all resulting transport work. */
+    fun startLiveSession(selection: OuraLiveSelection, expectedDeviceId: String = deviceId,
+                         expectedGeneration: Long? = null) = onGattThread("live-start") {
+        if (!ownsLiveSession(expectedDeviceId, expectedGeneration)) return@onGattThread
+        if (!reachedStreaming || driver?.phase !in setOf(OuraDriverPhase.Streaming, OuraDriverPhase.FetchingHistory)) return@onGattThread
+        val previousGeneration = liveWorkload.generation
+        liveWorkload.start(selection)
+        if (liveWorkload.generation != previousGeneration) liveOwnerPreviousGeneration = previousGeneration
+        scheduleLiveWorker()
+    }
+    fun updateLiveSession(selection: OuraLiveSelection, expectedDeviceId: String = deviceId,
+                          expectedGeneration: Long? = null) = onGattThread("live-selection") {
+        if (!ownsLiveSession(expectedDeviceId, expectedGeneration)) return@onGattThread
+        if (!selection.hr && !selection.motion) {
+            stopLiveSession(expectedDeviceId, expectedGeneration)
+            return@onGattThread
+        }
+        liveWorkload.update(selection)
+        scheduleLiveWorker()
+    }
+    fun stopLiveSession(expectedDeviceId: String = deviceId, expectedGeneration: Long? = null) = onGattThread("live-stop") {
+        if (!ownsLiveSession(expectedDeviceId, expectedGeneration)) return@onGattThread
+        if (!liveWorkScheduled && !sessionMemory.snapshot.active) return@onGattThread
+        liveStopReason = "explicit stop or lifecycle"
+        invalidateLiveWorkload()
+        endLiveSession(liveStopReason)
+    }
+    private fun applyLiveSelection() {
+        val requested = sessionMemory.snapshot.selection
+        val now = SystemClock.elapsedRealtime()
+        if (!requested.hr) hrRequestedAt = null else if (hrRequestedAt == null) hrRequestedAt = now
+        if (!requested.motion) motionRequestedAt = null else if (motionRequestedAt == null) motionRequestedAt = now
+        val selection = requested.copy(hr = requested.hr && !hrUnavailable, motion = requested.motion && !motionUnavailable)
+        liveHRDemand.update(selection.hr, ready = true)
+        if (selection.hr) scheduleReengage() else cancelReengage()
+        motionArmed = selection.motion
+        if (motionArmed) {
+            motionNeedsShutdown = true
+            if (motionDeadlineElapsedMs == null) {
+                val deadline = liveWorkload.armMotionDeadline(now)
+                motionDeadlineElapsedMs = deadline
+                handler.postDelayed(liveDeadline, (deadline - now).coerceAtLeast(0))
+            }
+        }
+        // Replace stale pending enables. An accepted write completes first, then shutdowns precede starts.
+        val commands = shutdownCommands() + buildList {
+            if (selection.hr) addAll(listOf(OuraCommands.liveHREnable(), OuraCommands.liveHRSubscribe()))
+            if (selection.motion) add(OuraCommands.liveMotionStart())
+        }
+        writeSession?.queue?.replaceLiveCommands(commands)
+        if (driver?.phase == OuraDriverPhase.Streaming) {
+            historyPausedForLive = true
+            _historySyncPhase.value = OuraHistorySyncPhase.PAUSED_FOR_LIVE
+        }
+        publishLiveSession()
+    }
+    private fun endLiveSession(reason: String, resumeHistory: Boolean = true) {
+        val wasActive = sessionMemory.snapshot.active
+        sessionMemory.stop(clearSamples = !resumeHistory)
+        handler.removeCallbacks(liveTick)
+        handler.removeCallbacks(liveDeadline)
+        motionDeadlineElapsedMs = null
+        if (liveLifecycleRegistered) (appContext as? Application)?.unregisterActivityLifecycleCallbacks(liveLifecycle)
+        liveLifecycleRegistered = false
+        liveHRDemand.update(wanted = false, ready = reachedStreaming)
+        cancelReengage()
+        motionArmed = false
+        writeSession?.queue?.replaceLiveCommands(shutdownCommands())
+        publishLiveSession()
+        if (wasActive) log("Oura: live session stopped ($reason; ACM packets=$liveMotionPackets samples=$liveMotionSamples)")
+        if (resumeHistory && historyPausedForLive) {
+            historyPausedForLive = false
+            flush()
+            log("Oura: resuming history after live session")
+            fetchHistoryIfIdle()
+        }
+    }
+
+    /** Apply view demand without reconnecting or disturbing an in-progress history download. */
+    private fun refreshLiveHRRequest() = onGattThread("live-view-request") {
+        val wanted = wantsLiveHR()
+        val d = driver ?: return@onGattThread
+        d.liveHRWanted = wanted
+        val ready = reachedStreaming &&
+            (d.phase == OuraDriverPhase.Streaming || d.phase == OuraDriverPhase.FetchingHistory)
+        val commands = liveHRDemand.update(wanted, ready)
+        if (!wanted) cancelReengage()
+        else if (ready) scheduleReengage()
+        if (commands.isNotEmpty()) {
+            log(if (wanted) "Oura: live HR requested by active view" else "Oura: live HR paused by active view")
+            commands.forEach(::write)
+        }
     }
 
     /** Android write completion is separate from the ring's protocol response. Never log bytes. */
@@ -1917,13 +2205,16 @@ class OuraLiveSource(
      * The pure driver owns every decode; we only route bytes and turn its results into transitions /
      * persisted rows. A throw anywhere here is contained by [guardedCallback] (degrade to "no data").
      */
-    private fun handleNotification(data: ByteArray) = guardedCallback("notification") {
+    private fun handleNotification(data: ByteArray, liveGeneration: Long = liveWorkload.generation,
+                                   receivedAtElapsedMs: Long = SystemClock.elapsedRealtime()) = guardedCallback("notification") {
         val d = driver ?: return@guardedCallback
         val bytes = IntArray(data.size) { data[it].toInt() and 0xFF }
         // Split any packed outer frames; route 0x2F secure sub-frames through the driver's secure handler
         // and feed all other bytes to the TLV reassembler.
         val nonSecure = ArrayList<Int>()
-        for (frame in OuraFraming.parseOuterFrames(bytes)) {
+        val frames = OuraFraming.parseOuterFrames(bytes)
+        val completelyFramed = frames.sumOf { it.totalLength } == bytes.size
+        for (frame in frames) {
             // #771/#772 capture: log each DISTINCT GetProductInfo reply (serial + hardware pages) raw, once
             // per op+body per session. Peek only — like the 0x11 summary / 0x0D battery below, a product-info
             // op is below the event-tag range (>= 0x41), so letting it fall through to the reassembler is a
@@ -1958,9 +2249,22 @@ class OuraLiveSource(
                     }
                 }
             }
-            if (frame.op == OuraFraming.secureSessionOp) {
+            if (frame.op == 0x33) {
+                val packet = OuraLiveMotion.decode(frame)
+                if (completelyFramed && liveWorkload.acceptsSamples(liveGeneration) && packet != null && sessionMemory.noteMotion(packet, receivedAtElapsedMs)) {
+                    liveMotionPackets += 1
+                    liveMotionSamples += packet.samples.size
+                    if (liveMotionPackets == 1L) log("Oura: first valid ACM packet (${frame.body.size}B, metadata=${packet.metadataByte})")
+                    publishLiveSession()
+                }
+            } else if (frame.op == 0x07) {
+                if (frame.body.size == 1) {
+                    val status = frame.body[0]
+                    log("Oura: realtime control response status=$status (acceptance is not samples)")
+                }
+            } else if (frame.op == OuraFraming.secureSessionOp) {
                 val secure = OuraFraming.parseSecureFrame(frame) ?: continue
-                routeSecure(d, secure)
+                routeSecure(d, secure, liveGeneration, receivedAtElapsedMs)
             } else if (frame.op == SET_AUTH_KEY_RESP_OP) {
                 // The post-factory-reset key-install acknowledgement (`25 01 00`, OURA_PROTOCOL.md s3.2):
                 // an OUTER frame, not a 0x2F secure sub-frame and not a TLV record. Route it to the adopt
@@ -2020,20 +2324,38 @@ class OuraLiveSource(
     }
 
     /** Route a 0x2F secure sub-frame to the driver and turn its result into a transition or live events. */
-    private fun routeSecure(d: OuraDriver, secure: com.noop.oura.OuraSecureFrame) = guardedCallback("secure-route") {
+    private fun routeSecure(d: OuraDriver, secure: com.noop.oura.OuraSecureFrame, liveGeneration: Long, receivedAtElapsedMs: Long) = guardedCallback("secure-route") {
         when (val routing = d.handleSecureFrame(secure)) {
             is OuraDriver.SecureRouting.Nonce -> {
+                invalidateLiveWorkload()
+                endLiveSession("authentication nonce", resumeHistory = false)
                 clearAuthWatchdog()   // the ring answered: the healthy path, and the watchdog's only exit
                 silentSessionsInARow = 0
                 advance(OuraTransition.NonceReceived(routing.nonce))
             }
             is OuraDriver.SecureRouting.AuthStatus -> {
                 log("Oura: auth status = ${routing.status.name}")
+                invalidateLiveWorkload()
+                endLiveSession("authentication restart", resumeHistory = false)
+                if (routing.status.isSuccess) {
+                    d.liveHRWanted = false
+                    liveHRDemand.authenticated()
+                    motionNeedsShutdown = true
+                    write(OuraCommands.liveMotionStop())
+                }
                 advance(OuraTransition.AuthCompleted(routing.status))
             }
             OuraDriver.SecureRouting.EnableAck -> advance(OuraTransition.EnableAckReceived)
             is OuraDriver.SecureRouting.FeatureStatus -> logFeatureStatus(routing.value)   // read-only; no advance
-            is OuraDriver.SecureRouting.LiveHRPush -> emit(d.ingestLiveHRPush(routing.body))
+            is OuraDriver.SecureRouting.LiveHRPush -> {
+                val events = d.ingestLiveHRPush(routing.body)
+                val hr = events.filterIsInstance<OuraEvent.Hr>().firstOrNull()?.value
+                if (liveWorkload.acceptsSamples(liveGeneration) && hr != null && sessionMemory.noteHr(hr.bpm, hr.ibiMs, receivedAtElapsedMs)) publishLiveSession()
+                if (liveWorkload.acceptsSamples(liveGeneration) && hr != null && hr.bpm in 30..220 && wantsLiveHR()) {
+                    liveSink(hr.bpm, listOfNotNull(hr.ibiMs))
+                }
+                emit(events)
+            }
             OuraDriver.SecureRouting.Unhandled -> Unit
         }
     }
@@ -2136,12 +2458,11 @@ class OuraLiveSource(
         for (e in events) when (e) {
             is OuraEvent.Hr -> {
                 val bpm = e.value.bpm
-                if (bpm in 30..220) {   // physiological gate for the LIVE readout only
+                if (bpm in 30..220) {
                     if (!loggedFirstHr) {
                         loggedFirstHr = true
                         log("Oura: receiving data - first sample $bpm bpm")
                     }
-                    handler.post { guardedCallback("live-sink") { liveSink(bpm, emptyList()) } }
                 }
                 // A LIVE HR push (0x2F) exists only while the ring is measuring on a finger, so it is the
                 // sole safe "worn now" signal — fed unconditionally (even a gated-out bpm still proves the
@@ -2169,8 +2490,6 @@ class OuraLiveSource(
                 }
             }
             is OuraEvent.Ibi -> {
-                val rr = e.value.ibiMs
-                if (rr in 250..3000) handler.post { guardedCallback("live-sink") { liveSink(0, listOf(rr)) } }
                 // A banked IBI is history data: anchor it to its REAL ring-time, exactly like the sibling
                 // banked streams (.Hrv/.Temp/.Spo2/.SleepPhaseEvent) - never the drain-arrival `now`.
                 // Stamping at `now` misfiled every overnight beat to the daytime sync moment, so the sleep
@@ -2413,7 +2732,12 @@ class OuraLiveSource(
      */
     private fun enqueueAnchoredOrPark(event: OuraEvent, ringTimestamp: Long, d: OuraDriver) {
         val ts = d.unixSeconds(forRingTimestamp = ringTimestamp)
-        if (ts != null) enqueue(listOf(event), ts.toInt()) else pendingAnchorEvents.add(event to ringTimestamp)
+        if (ts != null) {
+            enqueue(listOf(event), ts.toInt())
+            // These callers are history-only (temp/oxygen/HRV/breathing/movement), never live IBI.
+            // Without this Swift-parity bookkeeping a deadline restarts the entire backlog at zero.
+            drain.noteStoredRingTime(ringTimestamp, resumeCursorAtFetchStart)
+        } else pendingAnchorEvents.add(event to ringTimestamp)
     }
 
     private fun handleBattery(pct: Int) = guardedCallback("battery") {

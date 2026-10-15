@@ -7,6 +7,7 @@ internal class OuraWriteQueue(
     private val submit: (OuraCommand) -> Boolean,
     private val onStarted: (OuraCommand) -> Unit = {},
     private val onFinished: () -> Unit = {},
+    private val onCompleted: (OuraCommand) -> Unit = {},
     private val onFailure: (OuraCommand, Failure) -> Unit = { _, _ -> },
 ) {
     enum class Failure { REJECTED, COMPLETION_FAILED, TIMED_OUT }
@@ -22,10 +23,18 @@ internal class OuraWriteQueue(
         pump()
     }
 
+    @Synchronized fun replaceLiveCommands(commands: List<OuraCommand>) {
+        if (closed || finishing) return
+        pending.removeAll { it.label in LIVE_LABELS }
+        pending.addAll(commands)
+        pump()
+    }
+
     @Synchronized fun complete(success: Boolean) {
         val command = inFlight ?: return
         if (!success) { fail(command, Failure.COMPLETION_FAILED); return }
         inFlight = null
+        onCompleted(command)
         onFinished()
         pump()
     }
@@ -72,4 +81,8 @@ internal class OuraWriteQueue(
         close()
         onFailure(command, reason)
     }
+    companion object {
+        private val LIVE_LABELS = setOf("dhr_enable", "dhr_subscribe", "dhr_disable", "dhr_unsubscribe", "acm_start", "acm_stop")
+    }
+
 }

@@ -216,6 +216,21 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      *  coordinator so it can only ever reach the ring that is the live source. */
     fun reconnectOuraRing() = noopApp.sourceCoordinator.reconnectActiveRing()
 
+    /** Direct notification buffers for an explicit live session; no database polling. */
+    val ouraLiveSession: StateFlow<com.noop.ble.OuraLiveSessionSnapshot>
+        get() = noopApp.sourceCoordinator.ouraLiveSession
+    val ouraHistorySyncPhase: StateFlow<com.noop.ble.OuraHistorySyncPhase>
+        get() = noopApp.sourceCoordinator.ouraHistorySyncPhase
+    fun startOuraLiveSession(selection: com.noop.ble.OuraLiveSelection, expectedSourceDeviceId: String, expectedGeneration: Long) =
+        noopApp.sourceCoordinator.startOuraLiveSession(selection, expectedSourceDeviceId, expectedGeneration)
+    fun updateOuraLiveSession(selection: com.noop.ble.OuraLiveSelection, expectedSourceDeviceId: String, expectedGeneration: Long) =
+        noopApp.sourceCoordinator.updateOuraLiveSession(selection, expectedSourceDeviceId, expectedGeneration)
+    fun stopOuraLiveSession(expectedSourceDeviceId: String, expectedGeneration: Long) =
+        noopApp.sourceCoordinator.stopOuraLiveSession(expectedSourceDeviceId, expectedGeneration)
+
+    /** Dashboard lifecycle and selected signals control only the Oura live-HR feature. */
+    fun requestOuraDashboardLiveHR(wanted: Boolean?) = noopApp.sourceCoordinator.setOuraDashboardLiveHR(wanted)
+
     /** WHOOP-style day streak (#569): consecutive local days that carry a Charge score, computed on
      *  device from the merged daily metrics. A day "qualifies" when its [com.noop.data.DailyMetric] has a
      *  non-null `recovery`. Pure math lives in [com.noop.analytics.StreakCalculator] (Swift/Kotlin twin). */
