@@ -1,0 +1,18 @@
+<resources>
+    <string name="oura_transfer_title">Letzte beobachtete Verlaufsübertragung</string>
+    <string name="oura_transfer_active">Verlaufsübertragung läuft</string>
+    <string name="oura_transfer_complete">Verlaufsübertragung beendet</string>
+    <string name="oura_transfer_yielded">Verlauf pausiert für Live</string>
+    <string name="oura_transfer_stopped">Verlaufsübertragung unterbrochen</string>
+    <string name="oura_transfer_disconnected">Verbindung während der Verlaufsübertragung getrennt</string>
+    <string name="oura_transfer_started">Beginn: %1$s</string>
+    <string name="oura_transfer_ended">Ende: %1$s</string>
+    <string name="oura_transfer_rate">Zeitraum %1$.1f s · Empfangen %2$d B · %3$.1f B/s</string>
+    <string name="oura_transfer_notifications">Benachrichtigungen %1$d · Größte %2$d B</string>
+    <string name="oura_transfer_sizes">Nutzlastanzahl: ≤20 B %1$d · 21–100 B %2$d · &gt;100 B %3$d</string>
+    <string name="oura_transfer_frames">Vollständige äußere Frames %1$d · Benachrichtigungen mit mehreren Frames %2$d</string>
+    <string name="oura_transfer_records">Datensatzhüllen %1$d · Daraus dekodierte Ereignisse %2$d</string>
+    <string name="oura_transfer_link">MTU %1$d · TX PHY %2$s · RX PHY %3$s</string>
+    <string name="oura_transfer_priority">Beschleunigung angefordert: %1$s · Hohe Priorität angenommen: %2$s · Ausgewogene Priorität angenommen: %3$s · PHY-Wiederherstellung übermittelt: %4$s</string>
+    <string name="oura_transfer_note">Nur diese Verbindung; nach App-Neustart nicht gespeichert. Enthält Steuerdaten und Ruhezeiten. Zähler sind keine eindeutigen gespeicherten Messwerte. Angenommene Anfragen garantieren keine schnellere Verbindung.</string>
+</resources>

@@ -1,0 +1,18 @@
+<resources>
+    <string name="oura_transfer_title">Latest observed history transfer</string>
+    <string name="oura_transfer_active">History transfer running</string>
+    <string name="oura_transfer_complete">History transfer finished</string>
+    <string name="oura_transfer_yielded">History yielded to Live</string>
+    <string name="oura_transfer_stopped">History transfer interrupted</string>
+    <string name="oura_transfer_disconnected">Disconnected during history transfer</string>
+    <string name="oura_transfer_started">Started: %1$s</string>
+    <string name="oura_transfer_ended">Ended: %1$s</string>
+    <string name="oura_transfer_rate">Window %1$.1f s · Received %2$d B · %3$.1f B/s</string>
+    <string name="oura_transfer_notifications">Notifications %1$d · Largest %2$d B</string>
+    <string name="oura_transfer_sizes">Payload counts: ≤20 B %1$d · 21–100 B %2$d · &gt;100 B %3$d</string>
+    <string name="oura_transfer_frames">Complete outer frames %1$d · Multi-frame notifications %2$d</string>
+    <string name="oura_transfer_records">Record envelopes %1$d · Events decoded from those records %2$d</string>
+    <string name="oura_transfer_link">MTU %1$d · TX PHY %2$s · RX PHY %3$s</string>
+    <string name="oura_transfer_priority">Boost requested: %1$s · High-priority request accepted: %2$s · Balanced request accepted: %3$s · PHY restore submitted: %4$s</string>
+    <string name="oura_transfer_note">This connection only; not saved across app restarts. Includes control traffic and quiet time. Counts are not unique persisted samples. Accepted requests do not guarantee a faster link.</string>
+</resources>

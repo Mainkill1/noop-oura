@@ -323,8 +323,8 @@ Screenshots use Compose capture and remain build artifacts under the app’s ext
 
 ### Android 12.5.0 smoothing and inspection verification
 
-All 21 selected synthetic phone checks pass (20 in the full run, the remaining comparison
-accessibility case in a focused rerun). They cover historical smoothing, raw cursor values and gaps,
+All 22 selected synthetic phone checks pass in the final run, including the transfer recap at
+large text sizes. They cover historical smoothing, raw cursor values and gaps,
 large-font popup scrolling, source attribution, oxygen configuration wording, legends, and measured
 bottom-navigation clearance. Popup screenshots use the dialog window. The oxygen status title and
 History button have separate tap targets. These synthetic checks do not establish BLE behavior.

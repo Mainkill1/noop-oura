@@ -228,6 +228,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         get() = noopApp.sourceCoordinator.ouraLiveSession
     val ouraHistorySyncPhase: StateFlow<com.noop.ble.OuraHistorySyncPhase>
         get() = noopApp.sourceCoordinator.ouraHistorySyncPhase
+    val ouraHistoryTransfer: StateFlow<com.noop.ble.OuraHistoryTransferSnapshot>
+        get() = noopApp.sourceCoordinator.ouraHistoryTransfer
     fun startOuraLiveSession(selection: com.noop.ble.OuraLiveSelection, expectedSourceDeviceId: String, expectedGeneration: Long) =
         noopApp.sourceCoordinator.startOuraLiveSession(selection, expectedSourceDeviceId, expectedGeneration)
     fun updateOuraLiveSession(selection: com.noop.ble.OuraLiveSelection, expectedSourceDeviceId: String, expectedGeneration: Long) =

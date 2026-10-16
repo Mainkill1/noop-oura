@@ -68,16 +68,54 @@ internal fun OuraSummaryDetails(summary: SignalDecimation.Summary, unit: String,
 }
 
 @Composable
-internal fun OuraAcquisitionDetails(source: String?, loadedAt: Long?, imported: Boolean, history: OuraHistorySyncPhase?) {
+internal fun OuraAcquisitionDetails(source: String?, loadedAt: Long?, imported: Boolean, history: OuraHistorySyncPhase?, transfer: com.noop.ble.OuraHistoryTransferSnapshot? = null) {
     source?.let { Text(stringResource(R.string.oura_detail_source, it), style = NoopType.subhead, color = Palette.textPrimary) }
     val time = rememberOuraTimestampFormatter(seconds = true)
     loadedAt?.let { Text(stringResource(R.string.oura_detail_loaded, time.format(Instant.ofEpochMilli(it))),
         style = NoopType.captionNumber, color = Palette.textSecondary) }
     Text(stringResource(if (imported) R.string.oura_import_note else R.string.oura_detail_download_unknown),
         style = NoopType.caption, color = Palette.textSecondary)
+    if (!imported) OuraHistoryTransferDetails(transfer)
     if (!imported && history != null) Text(stringResource(when (history) {
         OuraHistorySyncPhase.SYNCING -> R.string.oura_live_history_syncing
         OuraHistorySyncPhase.PAUSED_FOR_LIVE -> R.string.oura_live_history_paused
         OuraHistorySyncPhase.IDLE -> R.string.oura_live_history_idle
     }), style = NoopType.caption, color = Palette.textSecondary)
+}
+
+/** Session recap describes observed traffic, never the provenance of every displayed measurement. */
+@Composable
+internal fun OuraHistoryTransferDetails(transfer: com.noop.ble.OuraHistoryTransferSnapshot?) {
+    val recap = transfer?.takeIf { it.startedAtMs != null } ?: return
+    val time = rememberOuraTimestampFormatter(seconds = true)
+    Text(stringResource(R.string.oura_transfer_title), style = NoopType.subhead, color = Palette.textPrimary)
+    Text(stringResource(when (recap.outcome) {
+        com.noop.ble.OuraHistoryTransferOutcome.ACTIVE -> R.string.oura_transfer_active
+        com.noop.ble.OuraHistoryTransferOutcome.COMPLETE -> R.string.oura_transfer_complete
+        com.noop.ble.OuraHistoryTransferOutcome.YIELDED -> R.string.oura_transfer_yielded
+        com.noop.ble.OuraHistoryTransferOutcome.DISCONNECTED -> R.string.oura_transfer_disconnected
+        else -> R.string.oura_transfer_stopped
+    }), style = NoopType.caption, color = Palette.textSecondary)
+    Text(stringResource(R.string.oura_transfer_started, time.format(Instant.ofEpochMilli(recap.startedAtMs!!))),
+        style = NoopType.captionNumber, color = Palette.textSecondary)
+    recap.endedAtMs?.let { Text(stringResource(R.string.oura_transfer_ended, time.format(Instant.ofEpochMilli(it))),
+        style = NoopType.captionNumber, color = Palette.textSecondary) }
+    Text(stringResource(R.string.oura_transfer_rate, recap.elapsedMs / 1000.0, recap.wireBytes,
+        if (recap.elapsedMs > 0) recap.wireBytes * 1000.0 / recap.elapsedMs else 0.0),
+        style = NoopType.captionNumber, color = Palette.textPrimary)
+    Text(stringResource(R.string.oura_transfer_notifications, recap.notifications, recap.maxNotificationBytes),
+        style = NoopType.captionNumber, color = Palette.textSecondary)
+    Text(stringResource(R.string.oura_transfer_sizes, recap.notificationSizes[0], recap.notificationSizes[1], recap.notificationSizes[2]),
+        style = NoopType.captionNumber, color = Palette.textSecondary)
+    Text(stringResource(R.string.oura_transfer_frames, recap.outerFrames, recap.packedNotifications),
+        style = NoopType.captionNumber, color = Palette.textSecondary)
+    Text(stringResource(R.string.oura_transfer_records, recap.records, recap.decodedEvents),
+        style = NoopType.captionNumber, color = Palette.textSecondary)
+    fun phy(value: Int?) = when (value) { 1 -> "1M"; 2 -> "2M"; 3 -> "LE Coded"; else -> "—" }
+    Text(stringResource(R.string.oura_transfer_link, recap.mtu, phy(recap.txPhy), phy(recap.rxPhy)),
+        style = NoopType.captionNumber, color = Palette.textSecondary)
+    Text(stringResource(R.string.oura_transfer_priority, recap.boostRequested.toString(), recap.priorityRequestAccepted?.toString() ?: "—",
+        recap.balancedRequestAccepted?.toString() ?: "—", recap.phyRestoreSubmitted?.toString() ?: "—"),
+        style = NoopType.captionNumber, color = Palette.textSecondary)
+    Text(stringResource(R.string.oura_transfer_note), style = NoopType.caption, color = Palette.textSecondary)
 }

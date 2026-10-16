@@ -320,6 +320,64 @@ class OuraLiveSource(
     private val scanner: BluetoothLeScanner? get() = adapter?.bluetoothLeScanner
 
     private var gatt: BluetoothGatt? = null
+    private var historyTransport: OuraHistoryTransport? = null
+    private val _historyTransfer = MutableStateFlow(OuraHistoryTransferSnapshot())
+    val historyTransfer: StateFlow<OuraHistoryTransferSnapshot> = _historyTransfer.asStateFlow()
+    private var lastTransferPublishMs = 0L
+    private val historyBoostExpiry = Runnable {
+        if (historyTransport?.expireBoost(SystemClock.elapsedRealtime()) == true) {
+            publishHistoryTransfer()
+            log("Oura: history transport boost lease ended; history completion is unchanged")
+        }
+    }
+
+    private fun createHistoryTransport(link: BluetoothGatt) {
+        val twoM = runCatching { adapter?.isLe2MPhySupported == true }.getOrDefault(false)
+        historyTransport = OuraHistoryTransport(deviceId, twoM, object : OuraHistoryTransport.Link {
+            override fun priority(high: Boolean): Boolean {
+                val accepted = runCatching { link.requestConnectionPriority(if (high)
+                    BluetoothGatt.CONNECTION_PRIORITY_HIGH else BluetoothGatt.CONNECTION_PRIORITY_BALANCED) }.getOrDefault(false)
+                log("Oura: history transport priority=${if (high) "high" else "balanced"} requestAccepted=$accepted")
+                return accepted
+            }
+            override fun readPhy(): Boolean = runCatching { link.readPhy(); true }.getOrDefault(false)
+            override fun preferPhy(tx: Int, rx: Int): Boolean {
+                fun mask(phy: Int) = when (phy) {
+                    2 -> BluetoothDevice.PHY_LE_2M_MASK
+                    3 -> BluetoothDevice.PHY_LE_CODED_MASK
+                    else -> BluetoothDevice.PHY_LE_1M_MASK
+                }
+                val submitted = runCatching { link.setPreferredPhy(mask(tx), mask(rx), BluetoothDevice.PHY_OPTION_NO_PREFERRED); true }.getOrDefault(false)
+                log("Oura: history transport PHY preference tx=$tx rx=$rx submitted=$submitted (not negotiated state)")
+                return submitted
+            }
+        })
+        lastTransferPublishMs = 0
+        publishHistoryTransfer()
+    }
+
+    private fun publishHistoryTransfer() {
+        val now = SystemClock.elapsedRealtime()
+        historyTransport?.let { _historyTransfer.value = it.snapshot(now) }
+        lastTransferPublishMs = now
+    }
+
+    private fun finishHistoryTransfer(outcome: OuraHistoryTransferOutcome, connected: Boolean = true) {
+        handler.removeCallbacks(historyBoostExpiry)
+        val transfer = historyTransport ?: return
+        val wasActive = transfer.snapshot(SystemClock.elapsedRealtime()).outcome == OuraHistoryTransferOutcome.ACTIVE
+        transfer.finish(outcome, SystemClock.elapsedRealtime(), System.currentTimeMillis(), connected)
+        publishHistoryTransfer()
+        if (wasActive) {
+            val result = _historyTransfer.value
+            log("Oura: history transport recap outcome=${result.outcome} elapsedMs=${result.elapsedMs} " +
+                "notifications=${result.notifications} bytes=${result.wireBytes} maxBytes=${result.maxNotificationBytes} " +
+                "outerFrames=${result.outerFrames} packedNotifications=${result.packedNotifications} " +
+                "envelopes=${result.records} decodedEvents=${result.decodedEvents} mtu=${result.mtu} " +
+                "txPhy=${result.txPhy} rxPhy=${result.rxPhy} (traffic, not unique stored samples)")
+        }
+    }
+
     /** Peripherals seen in the current scan, retained by address so a chosen one survives to connect. */
     private val seen = ConcurrentHashMap<String, BluetoothDevice>()
     /** A device asked to connect before a scan result for it landed (connect-by-address path). */
@@ -740,6 +798,10 @@ class OuraLiveSource(
             _historySyncPhase.value = OuraHistorySyncPhase.PAUSED_FOR_LIVE
             return@guardedCallback
         }
+        historyTransport?.begin(SystemClock.elapsedRealtime(), System.currentTimeMillis())
+        handler.removeCallbacks(historyBoostExpiry)
+        handler.postDelayed(historyBoostExpiry, OuraHistoryTransport.BOOST_LEASE_MS)
+        publishHistoryTransfer()
         _historySyncPhase.value = OuraHistorySyncPhase.SYNCING
         pendingDrainFinish = null
         // Arm the per-drain state: where we sought from (reboot detection), the seen/stored high-water
@@ -853,6 +915,8 @@ class OuraLiveSource(
         // two lines after "not a reboot (#2097)" and burn a chained pass that only re-read the kept cursor.
         val rebootFullPullPending = commitResumeCursor(completed)
         advance(OuraTransition.HistoryCursorAdvanced(cursor = historyCursor, moreData = false))
+        finishHistoryTransfer(if (completed) OuraHistoryTransferOutcome.COMPLETE
+            else if (sessionMemory.snapshot.active) OuraHistoryTransferOutcome.YIELDED else OuraHistoryTransferOutcome.STOPPED)
         if (sessionMemory.snapshot.active) {
             historyPausedForLive = true
             _historySyncPhase.value = OuraHistorySyncPhase.PAUSED_FOR_LIVE
@@ -1326,6 +1390,9 @@ class OuraLiveSource(
         // Tear down any prior link first so we never run two GATTs for this source.
         invalidateLiveWorkload()
         endLiveSession("connection restart", resumeHistory = false)
+        finishHistoryTransfer(OuraHistoryTransferOutcome.STOPPED)
+        historyTransport = null
+        _historyTransfer.value = OuraHistoryTransferSnapshot()
         val previousGatt = gatt
         val previousWrites = writeSession
         val shutdown = shutdownCommands()
@@ -1468,6 +1535,9 @@ class OuraLiveSource(
         // A process kill or unavailable radio still cannot guarantee delivery to the ring.
         val shutdown = shutdownCommands()
         driver?.stop()
+        finishHistoryTransfer(OuraHistoryTransferOutcome.STOPPED)
+        historyTransport = null
+        _historyTransfer.value = OuraHistoryTransferSnapshot()
         val previousGatt = gatt
         val previousWrites = writeSession
         gatt = null
@@ -1621,16 +1691,23 @@ class OuraLiveSource(
             }
             when (newState) {
                 BluetoothProfile.STATE_CONNECTED -> {
+                    if (historyTransport != null) {
+                        log("Oura: duplicate connected callback ignored for the current GATT")
+                        return@onGattThread
+                    }
                     if (status != BluetoothGatt.GATT_SUCCESS) {
                         log("Oura: WARNING connected with non-success status=$status")
                     }
                     retried133 = false   // a real connection clears the one-shot 133 retry guard
                     failedReconnectAttempts = 0   // a real connection clears the reconnect backoff (#912)
+                    createHistoryTransport(g)
                     log("Oura: connected (status=$status) - discovering services")
                     _linkPhase.value = LinkPhase.AUTHENTICATING   // link up; discovery + the nonce handshake follow
                     g.discoverServices()
                 }
                 BluetoothProfile.STATE_DISCONNECTED -> {
+                    finishHistoryTransfer(OuraHistoryTransferOutcome.DISCONNECTED, connected = false)
+                    historyTransport = null
                     invalidateLiveWorkload()
                     endLiveSession("link disconnected", resumeHistory = false)
                     historyPausedForLive = false
@@ -1720,8 +1797,24 @@ class OuraLiveSource(
 
         override fun onMtuChanged(g: BluetoothGatt, mtu: Int, status: Int) = onGattThread("mtu-changed") {
             if (g !== gatt) return@onGattThread
+            historyTransport?.mtu(mtu, status == BluetoothGatt.GATT_SUCCESS)
+            publishHistoryTransfer()
             log("Oura: MTU negotiated = $mtu (status=$status)")
             setUpNotifications(g)
+        }
+
+        override fun onPhyRead(g: BluetoothGatt, txPhy: Int, rxPhy: Int, status: Int) = onGattThread("phy-read") {
+            if (g !== gatt) return@onGattThread
+            historyTransport?.phyRead(txPhy, rxPhy, status == BluetoothGatt.GATT_SUCCESS)
+            publishHistoryTransfer()
+            log("Oura: history transport PHY read tx=$txPhy rx=$rxPhy gattStatus=$status")
+        }
+
+        override fun onPhyUpdate(g: BluetoothGatt, txPhy: Int, rxPhy: Int, status: Int) = onGattThread("phy-update") {
+            if (g !== gatt) return@onGattThread
+            historyTransport?.phyUpdated(txPhy, rxPhy, status == BluetoothGatt.GATT_SUCCESS)
+            publishHistoryTransfer()
+            log("Oura: history transport PHY update tx=$txPhy rx=$rxPhy gattStatus=$status")
         }
 
         override fun onDescriptorWrite(
@@ -2348,6 +2441,7 @@ class OuraLiveSource(
         val nonSecure = ArrayList<Int>()
         val frames = OuraFraming.parseOuterFrames(bytes)
         val completelyFramed = frames.sumOf { it.totalLength } == bytes.size
+        historyTransport?.notification(data.size, frames.size)
         for (frame in frames) {
             // #771/#772 capture: log each DISTINCT GetProductInfo reply (serial + hardware pages) raw, once
             // per op+body per session. Peek only — like the 0x11 summary / 0x0D battery below, a product-info
@@ -2443,6 +2537,7 @@ class OuraLiveSource(
                 // drain_events tracks the max timestamp of EVERY batch event), and while a continuation
                 // is pending the batch-quiet window stays open as long as records keep arriving.
                 val events = d.ingest(rec)
+                historyTransport?.records(1, events.size)
                 for (e in events) {
                     e.envelopeRingTimestamp?.let { drain.noteSeenRingTime(it) }
                 }
@@ -2457,12 +2552,14 @@ class OuraLiveSource(
                 emit(events)
             }
         }
+        if (receivedAtElapsedMs - lastTransferPublishMs >= 1000) publishHistoryTransfer()
     }
 
     /** Route a 0x2F secure sub-frame to the driver and turn its result into a transition or live events. */
     private fun routeSecure(d: OuraDriver, secure: com.noop.oura.OuraSecureFrame, liveGeneration: Long, receivedAtElapsedMs: Long) = guardedCallback("secure-route") {
         when (val routing = d.handleSecureFrame(secure)) {
             is OuraDriver.SecureRouting.Nonce -> {
+                finishHistoryTransfer(OuraHistoryTransferOutcome.STOPPED)
                 suspendRawInstruments()
                 invalidateLiveWorkload()
                 endLiveSession("authentication nonce", resumeHistory = false)
@@ -2471,6 +2568,7 @@ class OuraLiveSource(
                 advance(OuraTransition.NonceReceived(routing.nonce))
             }
             is OuraDriver.SecureRouting.AuthStatus -> {
+                finishHistoryTransfer(OuraHistoryTransferOutcome.STOPPED)
                 suspendRawInstruments()
                 log("Oura: auth status = ${routing.status.name}")
                 invalidateLiveWorkload()
@@ -3051,8 +3149,13 @@ class OuraLiveSource(
 
     /** Connection lifecycle and GATT callbacks share one executor; guards run after dispatch. */
     private fun onGattThread(label: String, block: () -> Unit) {
-        if (Looper.myLooper() === handler.looper) guardedCallback(label, block)
-        else handler.post { guardedCallback(label, block) }
+        val guarded = {
+            // Handler delays count uptime; check elapsed time on the first work after device sleep.
+            if (historyTransport?.expireBoost(SystemClock.elapsedRealtime()) == true) publishHistoryTransfer()
+            block()
+        }
+        if (Looper.myLooper() === handler.looper) guardedCallback(label, guarded)
+        else handler.post { guardedCallback(label, guarded) }
     }
 
 

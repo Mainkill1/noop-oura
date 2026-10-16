@@ -183,6 +183,8 @@ class SourceCoordinator(
     val ouraLiveSession: StateFlow<OuraLiveSessionSnapshot> = _ouraLiveSession.asStateFlow()
     private val _ouraHistorySyncPhase = MutableStateFlow(OuraHistorySyncPhase.IDLE)
     val ouraHistorySyncPhase: StateFlow<OuraHistorySyncPhase> = _ouraHistorySyncPhase.asStateFlow()
+    private val _ouraHistoryTransfer = MutableStateFlow(OuraHistoryTransferSnapshot())
+    val ouraHistoryTransfer: StateFlow<OuraHistoryTransferSnapshot> = _ouraHistoryTransfer.asStateFlow()
     fun startOuraLiveSession(selection: OuraLiveSelection, expectedSourceDeviceId: String, expectedGeneration: Long) {
         if (activeStrapId != expectedSourceDeviceId) return
         (activeSource as? OuraLiveSource)?.startLiveSession(selection, expectedSourceDeviceId, expectedGeneration)
@@ -642,6 +644,7 @@ class SourceCoordinator(
             launch { source.rawInstruments.collect { _ouraRawInstruments.value = it } }
             launch { source.oxygenFeatureStatus.collect { _ouraOxygenFeatureStatus.value = it } }
             launch { source.historySyncPhase.collect { _ouraHistorySyncPhase.value = it } }
+            launch { source.historyTransfer.collect { _ouraHistoryTransfer.value = it } }
             launch { source.linkPhase.collect { _ouraLinkPhase.value = it } }     // #2305
         }
         return source
@@ -696,6 +699,7 @@ class SourceCoordinator(
         _ouraRawInstruments.value = OuraRawState()
         _ouraOxygenFeatureStatus.value = null
         _ouraHistorySyncPhase.value = OuraHistorySyncPhase.IDLE
+        _ouraHistoryTransfer.value = OuraHistoryTransferSnapshot()
         _ouraLinkPhase.value = OuraLiveSource.LinkPhase.DISCONNECTED   // #2305
         // A stale speed/cadence/power readout must not outlive the strap session (the source's own stop()
         // already pushes an empty SensorMetrics, but reset here too so leaving for WHOOP / FTMS / Huami —

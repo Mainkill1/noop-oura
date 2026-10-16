@@ -1,0 +1,18 @@
+<resources>
+    <string name="oura_transfer_title">Última transferencia de historial observada</string>
+    <string name="oura_transfer_active">Transferencia de historial en curso</string>
+    <string name="oura_transfer_complete">Transferencia de historial finalizada</string>
+    <string name="oura_transfer_yielded">Historial pausado para Directo</string>
+    <string name="oura_transfer_stopped">Transferencia de historial interrumpida</string>
+    <string name="oura_transfer_disconnected">Desconectado durante la transferencia de historial</string>
+    <string name="oura_transfer_started">Inicio: %1$s</string>
+    <string name="oura_transfer_ended">Fin: %1$s</string>
+    <string name="oura_transfer_rate">Ventana %1$.1f s · Recibidos %2$d B · %3$.1f B/s</string>
+    <string name="oura_transfer_notifications">Notificaciones %1$d · Mayor %2$d B</string>
+    <string name="oura_transfer_sizes">Cargas: ≤20 B %1$d · 21–100 B %2$d · &gt;100 B %3$d</string>
+    <string name="oura_transfer_frames">Tramas externas completas %1$d · Notificaciones con varias tramas %2$d</string>
+    <string name="oura_transfer_records">Contenedores de registros %1$d · Eventos decodificados de esos registros %2$d</string>
+    <string name="oura_transfer_link">MTU %1$d · TX PHY %2$s · RX PHY %3$s</string>
+    <string name="oura_transfer_priority">Aceleración solicitada: %1$s · Prioridad alta aceptada: %2$s · Prioridad equilibrada aceptada: %3$s · Restauración PHY enviada: %4$s</string>
+    <string name="oura_transfer_note">Solo esta conexión; no se conserva al reiniciar la app. Incluye tráfico de control y tiempo de espera. Los recuentos no son muestras únicas guardadas. La aceptación no garantiza un enlace más rápido.</string>
+</resources>

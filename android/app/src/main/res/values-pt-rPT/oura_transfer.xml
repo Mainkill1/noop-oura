@@ -1,0 +1,18 @@
+<resources>
+    <string name="oura_transfer_title">Última transferência de histórico observada</string>
+    <string name="oura_transfer_active">Transferência de histórico em curso</string>
+    <string name="oura_transfer_complete">Transferência de histórico concluída</string>
+    <string name="oura_transfer_yielded">Histórico em pausa para Direto</string>
+    <string name="oura_transfer_stopped">Transferência de histórico interrompida</string>
+    <string name="oura_transfer_disconnected">Ligação perdida durante a transferência de histórico</string>
+    <string name="oura_transfer_started">Início: %1$s</string>
+    <string name="oura_transfer_ended">Fim: %1$s</string>
+    <string name="oura_transfer_rate">Janela %1$.1f s · Recebidos %2$d B · %3$.1f B/s</string>
+    <string name="oura_transfer_notifications">Notificações %1$d · Maior %2$d B</string>
+    <string name="oura_transfer_sizes">Cargas: ≤20 B %1$d · 21–100 B %2$d · &gt;100 B %3$d</string>
+    <string name="oura_transfer_frames">Tramas externas completas %1$d · Notificações com várias tramas %2$d</string>
+    <string name="oura_transfer_records">Invólucros de registos %1$d · Eventos descodificados desses registos %2$d</string>
+    <string name="oura_transfer_link">MTU %1$d · TX PHY %2$s · RX PHY %3$s</string>
+    <string name="oura_transfer_priority">Aceleração pedida: %1$s · Prioridade alta aceite: %2$s · Prioridade equilibrada aceite: %3$s · Restauro PHY enviado: %4$s</string>
+    <string name="oura_transfer_note">Apenas esta ligação; não é guardado ao reiniciar a aplicação. Inclui tráfego de controlo e tempo de espera. As contagens não são amostras únicas guardadas. Pedidos aceites não garantem uma ligação mais rápida.</string>
+</resources>

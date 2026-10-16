@@ -42,6 +42,7 @@ fun OuraScreen(vm: AppViewModel, onDevices: () -> Unit, onImport: () -> Unit, on
     var rawChannel by rememberSaveable { mutableStateOf("event:80") }
     var rawInterval by rememberSaveable { mutableLongStateOf(2000) }
     val historyPhase by vm.ouraHistorySyncPhase.collectAsStateWithLifecycle()
+    val historyTransfer by vm.ouraHistoryTransfer.collectAsStateWithLifecycle()
     val oxygenStatus by vm.ouraOxygenFeatureStatus.collectAsStateWithLifecycle()
     val recentDays by vm.recentDays.collectAsStateWithLifecycle()
     var sources by remember { mutableStateOf<List<OuraDashboardSource>>(emptyList()) }
@@ -60,6 +61,7 @@ fun OuraScreen(vm: AppViewModel, onDevices: () -> Unit, onImport: () -> Unit, on
     var elapsedNow by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
     val source = sources.firstOrNull { it.id == sourceId }
     val imported = source?.isImport == true
+    val visibleTransfer = historyTransfer.takeIf { !imported && it.sourceDeviceId == sourceId }
     val isRaw = category == OuraCategory.Raw
     val isLive = mode == OuraViewMode.Live && !isRaw
     val liveEligible = activeIsOura && source != null && !imported && sourceId == activeId
@@ -199,6 +201,7 @@ fun OuraScreen(vm: AppViewModel, onDevices: () -> Unit, onImport: () -> Unit, on
             OuraRawPanel(rawState.takeIf { it.sourceDeviceId == sourceId } ?: com.noop.ble.OuraRawState(), elapsedNow, rawChannel, rawInterval,
                 liveEligible, ringLinkPhase == com.noop.ble.OuraLiveSource.LinkPhase.AUTHENTICATED, { rawChannel = it }, { rawInterval = it }, detailsContent = {
                     Text(stringResource(R.string.oura_detail_source, source?.name.orEmpty()), style = NoopType.subhead, color = Palette.textPrimary)
+                    OuraHistoryTransferDetails(visibleTransfer)
                 })
         }
         if (isLive) item(key = "live-panel:$sourceId", contentType = "live") {
@@ -212,11 +215,12 @@ fun OuraScreen(vm: AppViewModel, onDevices: () -> Unit, onImport: () -> Unit, on
                 oxygenMode = oxygenStatus?.mode.takeIf { liveEligible && visibleSession.sourceDeviceId == sourceId },
                 detailsContent = {
                     Text(stringResource(R.string.oura_detail_source, source?.name.orEmpty()), style = NoopType.subhead, color = Palette.textPrimary)
+                    OuraHistoryTransferDetails(visibleTransfer)
                 })
         }
         if (isLive && category == OuraCategory.Health && snapshot != null) item(key = "recorded-health:$sourceId") {
             OuraRecordedHealth(snapshot, tempUnit, onHistory = { owner.hide(); mode = OuraViewMode.History }, detailsContent = {
-                OuraAcquisitionDetails(source?.name, window?.loadedAtMs, imported, historyPhase.takeIf { activeIsOura && sourceId == activeId })
+                OuraAcquisitionDetails(source?.name, window?.loadedAtMs, imported, historyPhase.takeIf { activeIsOura && sourceId == activeId }, visibleTransfer)
             })
         }
         if (failed && !isRaw) item(key = "error", contentType = "status") {
@@ -238,12 +242,12 @@ fun OuraScreen(vm: AppViewModel, onDevices: () -> Unit, onImport: () -> Unit, on
             if (category == OuraCategory.Compare) item(key = "compare:$sourceId", contentType = "compare") {
                 OuraComparisonCard(allKeys, displaySignals, window.from, window.to, imported, tempUnit, comparison,
                     { comparisonCsv = it.joinToString(",") }, detailsContent = {
-                        OuraAcquisitionDetails(source?.name, window.loadedAtMs, imported, historyPhase.takeIf { activeIsOura && sourceId == activeId })
+                        OuraAcquisitionDetails(source?.name, window.loadedAtMs, imported, historyPhase.takeIf { activeIsOura && sourceId == activeId }, visibleTransfer)
                     })
             } else {
                 if (metricKeys.isNotEmpty()) item(key = "overview:$sourceId:$category", contentType = "overview") {
                     OuraStatsOverview(snapshot, metricKeys, imported, tempUnit, isLive = false, detailsContent = {
-                        OuraAcquisitionDetails(source?.name, window.loadedAtMs, imported, historyPhase.takeIf { activeIsOura && sourceId == activeId })
+                        OuraAcquisitionDetails(source?.name, window.loadedAtMs, imported, historyPhase.takeIf { activeIsOura && sourceId == activeId }, visibleTransfer)
                     })
                 }
                 if (category == OuraCategory.Sleep) {
@@ -251,16 +255,16 @@ fun OuraScreen(vm: AppViewModel, onDevices: () -> Unit, onImport: () -> Unit, on
                         Text(stringResource(R.string.oura_no_sleep), style = NoopType.body, color = Palette.textSecondary)
                     }
                     items(snapshot.sleeps, key = { "sleep:${it.deviceId}:${it.startTs}" }, contentType = { "sleep" }) { sleep -> OuraSleepCard(sleep, detailsContent = {
-                        OuraAcquisitionDetails(source?.name, window?.loadedAtMs, imported, historyPhase.takeIf { activeIsOura && sourceId == activeId })
+                        OuraAcquisitionDetails(source?.name, window?.loadedAtMs, imported, historyPhase.takeIf { activeIsOura && sourceId == activeId }, visibleTransfer)
                     }) }
                 }
                 if (category == OuraCategory.Movement && !imported) item(key = "motion-details:$sourceId", contentType = "motion") {
                     Column(verticalArrangement = Arrangement.spacedBy(Metrics.space8)) {
                         OuraLiveMotionDetails(snapshot.liveMotionSeconds, detailsContent = {
-                            OuraAcquisitionDetails(source?.name, window?.loadedAtMs, imported, historyPhase.takeIf { activeIsOura && sourceId == activeId })
+                            OuraAcquisitionDetails(source?.name, window?.loadedAtMs, imported, historyPhase.takeIf { activeIsOura && sourceId == activeId }, visibleTransfer)
                         })
                         OuraMovementDetails(snapshot.motionWindows, detailsContent = {
-                            OuraAcquisitionDetails(source?.name, window?.loadedAtMs, imported, historyPhase.takeIf { activeIsOura && sourceId == activeId })
+                            OuraAcquisitionDetails(source?.name, window?.loadedAtMs, imported, historyPhase.takeIf { activeIsOura && sourceId == activeId }, visibleTransfer)
                         })
                     }
                 }
@@ -272,7 +276,7 @@ fun OuraScreen(vm: AppViewModel, onDevices: () -> Unit, onImport: () -> Unit, on
                     val (scale, offset) = ouraValueTransform(metric, tempUnit)
                     OuraSignalCard(title, unit, note, displaySignals.getValue(metric), window.from, window.to, showRange || metric.startsWith("live_motion_"),
                         valueScale = scale, valueOffset = offset, detailsContent = {
-                            OuraAcquisitionDetails(source?.name, window.loadedAtMs, imported, historyPhase.takeIf { activeIsOura && sourceId == activeId })
+                            OuraAcquisitionDetails(source?.name, window.loadedAtMs, imported, historyPhase.takeIf { activeIsOura && sourceId == activeId }, visibleTransfer)
                         })
                 }
             }

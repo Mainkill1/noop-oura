@@ -37,6 +37,12 @@ choices, not measured hardware capacity or guarantees.** Apple lifecycle/transpo
 | Official history operation watchdog | 120 s in examined paths | Static candidate; distinct from quiet gaps; not a NOOP policy or validated ring limit |
 | Official extended batch/recovery | Initial target 64; one path up to 3 rereads at about 100 ms scheduling delay | Static candidate; not a proven safe batch size or retry recipe; terminal reconstruction incomplete |
 
+Android 12.5.0 adds a 300-second host transport-boost lease, checked against elapsed time at
+connection-executor entry as well as by its scheduled timer. It releases priority/PHY preferences;
+it does not stop Live or declare an unfinished history drain complete. Standard PHY reading occurs
+once per connection; priority requests occur once per actual drain and at its exit. See
+[transfer controls and recap](BLE-transfer-speed.md#current-noop-baseline).
+
 Source locations: [Android transport](../../android/app/src/main/java/com/noop/ble/OuraLiveSource.kt),
 [queue](../../android/app/src/main/java/com/noop/ble/OuraWriteQueue.kt),
 [history decision core](../../android/app/src/main/java/com/noop/oura/OuraHistoryDrain.kt),

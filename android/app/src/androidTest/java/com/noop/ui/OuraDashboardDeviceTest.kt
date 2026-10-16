@@ -54,6 +54,28 @@ class OuraDashboardDeviceTest {
         captureEvidence("overview-large-text")
     }
 
+    @Test fun transferRecapKeepsTrafficAttributionAndCloseReachableAtLargeText() {
+        val recap = com.noop.ble.OuraHistoryTransferSnapshot(sourceDeviceId = "synthetic",
+            startedAtMs = 1000, endedAtMs = 2000, elapsedMs = 1000,
+            outcome = com.noop.ble.OuraHistoryTransferOutcome.YIELDED, mtu = 247, txPhy = 1, rxPhy = 1,
+            notifications = 3, wireBytes = 260, maxNotificationBytes = 200,
+            notificationSizes = listOf(1, 1, 1), outerFrames = 11, packedNotifications = 1,
+            records = 5, decodedEvents = 3)
+        compose.setContent {
+            val density = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(density.density, 2f)) {
+                TestTheme { OuraDetailsDialog("Synthetic transfer", {}) { OuraHistoryTransferDetails(recap) } }
+            }
+        }
+        compose.onNodeWithText("History yielded to Live").assertExists()
+        compose.onNodeWithText("Window 1.0 s · Received 260 B · 260.0 B/s").assertExists()
+        compose.onNodeWithText("Record envelopes 5 · Events decoded from those records 3").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("MTU 247 · TX PHY 1M · RX PHY 1M").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("This connection only;", substring = true).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("oura-details-close").assertIsDisplayed()
+        captureEvidence("history-transfer-recap-large-font-synthetic")
+    }
+
     @Test fun mainNavigationOpensOuraWithoutOpeningMore() {
         val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as android.app.Application
         val store = ViewModelStore()
@@ -271,7 +293,8 @@ class OuraDashboardDeviceTest {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val directory = java.io.File(instrumentation.targetContext.getExternalFilesDir(null), "oura-test-evidence")
         check(directory.mkdirs() || directory.isDirectory)
-        val bitmap = compose.onAllNodes(isRoot()).onLast().captureToImage().asAndroidBitmap()
+        val window = if (compose.onAllNodes(isDialog()).fetchSemanticsNodes().isNotEmpty()) compose.onNode(isDialog()) else compose.onRoot()
+        val bitmap = window.captureToImage().asAndroidBitmap()
         try {
             java.io.File(directory, "$name.png").outputStream().use {
                 check(bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it))
