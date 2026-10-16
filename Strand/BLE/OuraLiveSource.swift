@@ -467,9 +467,8 @@ public final class OuraLiveSource: NSObject, ObservableObject {
     /// (with their own ring timestamp) until the anchor lands (`drainPendingAnchorEvents`), so they get
     /// their real historical time instead of a premature wall-clock guess. The ring's 0x42 time-sync can
     /// arrive anywhere in a history-fetch stream, not necessarily first, so records that land before it
-    /// are parked here and re-stamped the moment an anchor lands. Drained with an honest wall-clock
-    /// fallback at teardown if no anchor ever arrived this session (never silently dropped). Reset on
-    /// stop/disconnect.
+    /// are parked here and re-stamped the moment an anchor lands. Timestamps are never guessed at
+    /// teardown; the cursor leaves unresolved records available for retry on the next connection.
     private var pendingAnchorEvents: [(event: OuraEvent, ringTimestamp: UInt32)] = []
     /// True once the live-HR stream has been requested, so the disconnect handler can tell "we never got
     /// authenticated/streaming" (-> honest note) from "the link just dropped".
@@ -960,8 +959,13 @@ public final class OuraLiveSource: NSObject, ObservableObject {
         let resolves = drain.maxStoredRingTime > 0
             && (driver?.unixSeconds(forRingTimestamp: drain.maxStoredRingTime) != nil)
         let anchorConfirmsContinuity = drain.sawPreResumeData && syncAnchorsConfirmContinuity()
-        let newCursor = drain.resumeCursorAtDrainEnd(currentCursor: historyCursor, resolvesUnderAnchor: resolves,
+        let proposedCursor = drain.resumeCursorAtDrainEnd(currentCursor: historyCursor, resolvesUnderAnchor: resolves,
                                                       anchorConfirmsContinuity: anchorConfirmsContinuity)
+        let unresolvedBeforeCursor = pendingAnchorEvents.contains { pending in
+            if case .ibi = pending.event { return false }
+            return pending.ringTimestamp <= proposedCursor
+        }
+        let newCursor = unresolvedBeforeCursor ? historyCursor : proposedCursor
         if drain.sawPreResumeData, !anchorConfirmsContinuity {
             log("Oura: history \(how) but the ring served data older than cursor \(resumeCursorAtFetchStart) - clock reset/seek ignored; next connect does a full pull")
             historyCursor = 0
@@ -1197,8 +1201,8 @@ public final class OuraLiveSource: NSObject, ObservableObject {
     }
 
     /// Record a STORED history sample's ring-time toward the resume cursor (open_oura `nextEventToSync`).
-    /// Called only where a sample resolved a REAL anchored time and was enqueued — never for a no-anchor
-    /// wall-clock fallback. Also flags a reboot: a real sample older than where we sought this fetch.
+    /// Called only where a sample resolved a REAL anchored time and was enqueued; unresolved records
+    /// remain pending for an anchor or retry. Also flags a reboot: a real sample older than where we sought this fetch.
     private func noteStoredHistoryRingTime(_ rt: UInt32) {
         // A ring-time above the plausibility ceiling is corrupt; letting it set the resume cursor would
         // seek the next session into nonsense. Bounds the cursor at the source.
@@ -1720,7 +1724,7 @@ public final class OuraLiveSource: NSObject, ObservableObject {
         writeCharacteristic = nil
         notifyCharacteristic = nil
         // Drain BEFORE driver.stop() clears its anchor, so a pending event still gets a real anchored
-        // time if one exists rather than always falling back to wall-clock at teardown. Same for a
+        // time if one exists without guessing a wall-clock time at teardown. Same for a
         // hypnogram burst still accumulating (e.g. the session ended mid-drain).
         if let burst = hypnogramAssembler.flush() {
             persistHypnogramBurst(burst)
@@ -2023,32 +2027,26 @@ public final class OuraLiveSource: NSObject, ObservableObject {
     }
 
     /// Flush every event parked in `pendingAnchorEvents`, now that `driver.unixSeconds` can resolve them
-    /// (called right after the anchor is set) - OR, if called at session teardown with NO anchor ever
-    /// having arrived, with an honest wall-clock fallback (a rough stamp beats silently dropping real
-    /// decoded samples). Reset the buffer afterward so nothing is drained twice.
+    /// (called right after the anchor is set). Unresolved records remain pending without guessed times;
+    /// the durable cursor cannot pass them, so a later connection can re-fetch them.
     private func drainPendingAnchorEvents() {
         guard !pendingAnchorEvents.isEmpty, let driver else { return }
-        let now = Int(Date().timeIntervalSince1970)
         var stamped: [(event: OuraEvent, ts: Int)] = []
+        var unresolved: [(event: OuraEvent, ringTimestamp: UInt32)] = []
         for pending in pendingAnchorEvents {
             if let ts = driver.unixSeconds(forRingTimestamp: pending.ringTimestamp) {
                 stamped.append((event: pending.event, ts: ts))
-                // A parked IBI can be a LIVE beat that arrived before the anchor (see .ibi in ingest());
-                // it must never advance the resume cursor either, or a live push could skip un-drained
-                // backlog on a force-stopped drain. Only the history-only siblings drive the cursor.
                 if case .ibi = pending.event {} else {
-                    noteStoredHistoryRingTime(pending.ringTimestamp)   // parked history sample placed → advance resume cursor
+                    noteStoredHistoryRingTime(pending.ringTimestamp)
                 }
             } else {
-                stamped.append((event: pending.event, ts: now))   // honest wall-clock fallback; NEVER advances the cursor
+                unresolved.append(pending)
             }
         }
-        // Batched by resolved second, exactly like the live path (#1072): a record's parked beats are
-        // released as ONE insert so `ord` records their emission order instead of restarting at 0 per beat.
         for batch in OuraStreamMapping.batched(stamped) {
             enqueue(batch.events, ts: batch.ts)
         }
-        pendingAnchorEvents.removeAll()
+        pendingAnchorEvents = unresolved
     }
 
     // MARK: - Live ingest

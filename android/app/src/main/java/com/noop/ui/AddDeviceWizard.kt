@@ -411,8 +411,11 @@ fun AddDeviceWizard(
         )
         // The takeover always makes the ring active (it is the user's new live source); no make-active
         // prompt - the destructive gate already committed to "this is now your device".
-        scope.launch { viewModel.registerDevice(device, makeActive = true) }
-        if (closeAfter) onClose()
+        scope.launch {
+            viewModel.registerDevice(device, makeActive = true)
+            // Dismissing cancels this scope; finish saving and activating the ring first.
+            if (closeAfter) onClose()
+        }
     }
 
     // The live adopt-failure reason (the source's needs-pairing message). Collected here so the honest
@@ -1198,6 +1201,7 @@ private fun OuraAdvancedKeyStep(
     onKeyDraft: (String) -> Unit,
     onScan: () -> Unit,
 ) {
+    var importedKeys by remember { mutableStateOf<List<com.noop.ingest.OuraKeyXml.Entry>>(emptyList()) }
     val parsed = parseHexKey(keyDraft)
     val showError = keyDraft.isNotBlank() && parsed == null
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -1208,6 +1212,13 @@ private fun OuraAdvancedKeyStep(
                 "extract keys for you and cannot help you find one. If you do not know what this means, go " +
                 "back and use the standard setup or file import.",
         )
+        OuraKeyImportButton { importedKeys = it }
+        importedKeys.forEach { entry ->
+            TextButton(onClick = {
+                onKeyDraft(entry.key.joinToString("") { "%02x".format(it) })
+                importedKeys = emptyList()
+            }) { Text(entry.deviceId, style = NoopType.bodyNumber, color = Palette.accent) }
+        }
         Overline("Ring key (32 hex characters)")
         OutlinedTextField(
             value = keyDraft,
@@ -1216,7 +1227,7 @@ private fun OuraAdvancedKeyStep(
             isError = showError,
             placeholder = { Text(uiString(R.string.l10n_add_device_wizard_0123456789abcdef0123456789abcdef_b1775a78), style = NoopType.body, color = Palette.textTertiary) },
             keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Ascii),
-            visualTransformation = VisualTransformation.None,
+            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
             colors = wizardFieldColors(),
             modifier = Modifier
                 .fillMaxWidth()

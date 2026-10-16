@@ -116,8 +116,8 @@ class OuraDriver(
      * session started on exactly the second of such a connect (3–49 min each, ≈ 2 h of a 9 h night).
      * With the flag false the driver goes straight to `Streaming` — authenticated and idle — so the
      * history drain, SyncTime and status reads run as before and no daytime-HR write is made at all.
-     * Read once, at the auth-success step. Twin of the Swift `OuraDriver.liveHRWanted`; Android's
-     * `OuraLiveSource` has no screen-off suspend yet (#1546), so nothing clears it there today.
+     * Read once, at the auth-success step. Twin of Swift `OuraDriver.liveHRWanted`; Android sets
+     * this from explicit Live-view demand, while Swift uses its screen/night stand-down policy.
      */
     var liveHRWanted: Boolean = true
 
@@ -339,7 +339,7 @@ class OuraDriver(
     /**
      * Convert a record's ring-clock timestamp to unix seconds using the current session's anchor
      * (OURA_PROTOCOL.md s5.5). Returns null when no anchor has arrived yet this session, so the caller
-     * can honestly fall back (e.g. to wall-clock arrival time) instead of guessing. Kotlin twin of
+     * can retain the record for an anchor or retry without guessing a historical time. Kotlin twin of
      * Swift's `unixSeconds(forRingTimestamp:)`. `rt` is the unsigned 32-bit ring timestamp as a Long.
      */
     fun unixSeconds(forRingTimestamp: Long): Long? {
@@ -348,7 +348,7 @@ class OuraDriver(
         val deltaTicks = forRingTimestamp - anchorRt
         val ms = anchorMs + deltaTicks * 100   // default 100 ms/tick (s5.5); bounded input, no overflow
         // #968: a corrupt/misaligned ring timestamp (seen on a full cursor=0 history dump) can convert to
-        // an implausible epoch; return null so the caller falls back to arrival time instead of banking it.
+        // an implausible epoch; return null so the caller retains or retries it without banking a guessed time.
         //
         // #1073: a banked SAMPLE is always in the past, so its upper bound is "now", NOT the 2020-2035
         // anchor window. That window is the right screen for ADOPTING a clock anchor and far too generous

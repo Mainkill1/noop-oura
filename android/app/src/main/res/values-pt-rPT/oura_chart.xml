@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="oura_chart_zoom_in">Ampliar</string>
+    <string name="oura_chart_zoom_out">Reduzir</string>
+    <string name="oura_chart_reset">Repor vista</string>
+    <string name="oura_chart_extra_scale">%1$s · inferior %2$s · meio %3$s · superior %4$s %5$s</string>
+    <string name="oura_chart_zoom_amount">%1$s× · vista fixa</string>
+    <string name="oura_chart_gestures">Toque ou arraste para inspecionar · Aproxime os dedos para reduzir · Dois dedos para deslocar</string>
+    <string name="oura_chart_record_time">Hora do registo</string>
+    <string name="oura_temperature_recorded_only">Temperatura da pele · apenas registada</string>
+    <string name="oura_temperature_live_unavailable">Não existe uma leitura validada da temperatura da pele em direto. Abra Histórico para ver a temperatura registada.</string>
+</resources>

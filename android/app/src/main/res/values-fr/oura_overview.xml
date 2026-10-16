@@ -1,0 +1,6 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+  <string name="oura_overview">Toutes les statistiques Oura</string>
+  <string name="oura_overview_range">Une même période s’applique à toutes les statistiques et tous les graphiques. Les valeurs sont les moyennes des mesures disponibles ; un tiret indique aucune mesure sur cette période.</string>
+  <string name="oura_chart_details">Graphiques détaillés</string>
+</resources>

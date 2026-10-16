@@ -271,6 +271,22 @@ interface WhoopDao : DeviceRegistryDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertRr(rows: List<RrInterval>): List<Long>
 
+    @Query("SELECT * FROM event WHERE deviceId = :deviceId AND ts = :ts AND kind = :kind")
+    suspend fun eventAt(deviceId: String, ts: Long, kind: String): EventRow?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun replaceEvent(row: EventRow): Long
+
+    /** Caller holds the repository database transaction: concurrent partial seconds cannot lose counts. */
+    @Transaction
+    suspend fun mergeLiveMotion(row: EventRow): Long {
+        val incoming = requireNotNull(OuraLiveMotionHistory.parse(row.ts, row.payloadJSON)) { "Invalid incoming Oura live motion summary" }.summary
+        val previous = eventAt(row.deviceId, row.ts, row.kind)
+        val merged = if (previous == null) incoming else
+            requireNotNull(OuraLiveMotionHistory.parse(row.ts, previous.payloadJSON)) { "Invalid persisted Oura live motion summary" }.summary.merge(incoming)
+        return replaceEvent(row.copy(payloadJSON = merged.payloadJSON()))
+    }
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertEvents(rows: List<EventRow>): List<Long>
 

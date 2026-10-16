@@ -419,10 +419,21 @@ Also send the matching unsubscribe when tearing down a live session: `2f 03 26 0
 `2f 03 27 02 00`. Step 3 of the enable triplet above leaves the ring subscribed at "latest"
 (byte2 = 2); the mode-disable write alone never turns that subscription back off.
 
-> Behaviour caveat: [open_oura-r3] reports that on its Ring-3 unit, realtime `0x06`-based enabling ACK'd but emitted no stream within 60–90 s, whereas the `0x2F`/feature-`0x02` path above produced ~1 Hz IBI. **NOOP must use the feature-`0x02` (`0x2F`) path, not `0x06`,** and treat absence of `0x28` pushes within ~10 s as "not streaming → retry/reseat."
+These are separate protocol operations: mode 0 disables the daytime-HR feature; subscription 0
+ends notifications to this client. Starting with Android 12.4.1, automatic page/authentication/teardown
+cleanup restores automatic mode with `2f 03 22 02 01` before unsubscribing. On the target Gen5,
+unsubscribe alone left mode 3 active for minutes. The worker cancels the phone's HR renewals,
+accepts late first samples while selected, and prevents automatic feature-wide mode-0 shutdown.
+The explicit mode-off command remains available as a protocol fact; see
+[the Android live-session contract](OURA_LIVE_PROTOCOL.md) for workload and verification limits.
+
+> Behaviour caveat: [open_oura-r3] reports that on its Ring-3 unit, realtime `0x06`-based enabling ACK'd but emitted no stream within 60–90 s, whereas the `0x2F`/feature-`0x02` path above produced ~1 Hz IBI. **NOOP must use the feature-`0x02` (`0x2F`) path, not `0x06`,** and report absence of `0x28` pushes as waiting for samples. Android continuous Live keeps its paced renewals active while selected; a ten-second quiet interval alone is not a permanent failure.
 
 ### 5.7 DHR auto-revert
-Daytime-HR auto-reverts after ~20 s; NOOP re-engages every ~15 s while a live session is open. [open_ring]
+The reference reports daytime-HR auto-revert after approximately 20 seconds. [open_ring]
+This is not established across generations: the target Gen5 still reported forced live mode 3
+several minutes after unsubscribe on 2026-10-15. Android therefore explicitly restores automatic
+mode on exit. NOOP retains its paced 15-second re-engagement only while live HR is selected.
 
 ---
 
@@ -940,9 +951,9 @@ edit of the ring's tag.
     Tier-A stream NOOP already trusts, so it will not be fixed by a better decode.
   - **⚠️ SCALE HYPOTHESIS: the `int8 × 8` axes are plausibly a ±1 g full-scale gravity vector — and the
     axis ORDER/POLARITY is unknown (NOOP, 2026-08-07).** Two independent consumers of the ring's
-    **live accelerometer stream** — a path NOOP does **not** implement (`0x06` set-realtime with type
-    bit `0x20`, responses under tag `0x33` carrying two samples of i16-LE x/y/z per notification, plus a
-    sample-rate byte) — hardcode an accelerometer scale of **1024** counts/g [open_oura-viz] and **1000**
+    **live accelerometer stream** — now implemented as explicit, bounded raw instrumentation in
+    NOOP's Experimental Android session ([wire contract](OURA_LIVE_PROTOCOL.md)); `0x06` mask `0x20`,
+    `0x33` responses with one or two i16-LE XYZ vectors and an opaque metadata byte — hardcode an accelerometer scale of **1024** counts/g [open_oura-viz] and **1000**
     counts/g, the latter annotated *"empirical: ~1000 at rest"* [open_oura-ctl]. Both agree within 2.4 %,
     and both are consistent with a **±2 g 12-bit range = 1024 counts/g**, which is also the `Acm2g50Hz`
     entry in that repo's RData data-type enum; both files independently assume **50 Hz**. If 1024 is
@@ -967,8 +978,8 @@ edit of the ring's tag.
     the ±1 g reading of `0x47`. Then compare a per-window deviation magnitude
     `|raw − lowpass(raw)| / counts_per_g` against the ring's **own** six MAD statistics in `0x72`
     `sleep_acm_period` (§6.12) for the same window — which cross-checks that decode at the same time
-    (`0x72` is abundant: 5,723 records in the §10 corpus). Blocked on NOOP implementing the `0x06`
-    realtime write: a **new outbound command to hardware**, so the BLE safety contract applies, and
+    (`0x72` is abundant: 5,723 records in the §10 corpus). The new bounded `0x06` instrumentation
+    path is fixture-tested but still needs NOOP hardware validation; the BLE safety contract applies, and
     [open_oura-viz] notes real-time measurements *do not self-stop reliably* — a mandatory teardown write
     (`06 04 00000000`) and a time-boxed duration are part of the shape. Note also that `0x47` is
     movement-gated (no still sample ever arrives), so the lowpass/zero-velocity approach those files use

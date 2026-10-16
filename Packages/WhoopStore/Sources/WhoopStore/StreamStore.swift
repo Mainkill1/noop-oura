@@ -1,6 +1,7 @@
 import Foundation
 import GRDB
 import WhoopProtocol
+import OuraProtocol
 
 private struct RRBatchSecond: Hashable {
     let ts: Int
@@ -290,7 +291,16 @@ extension WhoopStore {
                     """)
                 for e in streams.events {
                     let json = try WhoopStore.encodePayload(e.payload)
-                    try stmt.execute(arguments: [deviceId, e.ts, e.kind, json])
+                    if e.kind == OuraLiveMotionSummary.eventKind {
+                        let incoming = try OuraLiveMotionSummary.parse(ts: Int64(e.ts), payload: json)
+                        let previous = try String.fetchOne(db, sql: "SELECT payloadJSON FROM event WHERE deviceId = ? AND ts = ? AND kind = ?",
+                                                           arguments: [deviceId, e.ts, e.kind])
+                        let merged = try previous.map { try OuraLiveMotionSummary.parse(ts: Int64(e.ts), payload: $0).merge(incoming) } ?? incoming
+                        try db.execute(sql: "INSERT INTO event(deviceId, ts, kind, payloadJSON) VALUES (?, ?, ?, ?) ON CONFLICT(deviceId, ts, kind) DO UPDATE SET payloadJSON = excluded.payloadJSON, synced = 0",
+                                       arguments: [deviceId, e.ts, e.kind, try merged.payloadJSON()])
+                    } else {
+                        try stmt.execute(arguments: [deviceId, e.ts, e.kind, json])
+                    }
                     ev += db.changesCount
                 }
             }

@@ -421,6 +421,7 @@ object Metrics {
     val screenPadding = 24.dp
     val tileHeight = 108.dp   // every metric tile is this tall
     val chartHeight = 220.dp
+    val largeChartHeight = 320.dp
     val dialogScrollableMaxHeight = 560.dp
     val divider = 1.dp
     val compactChartHeight = chartHeight - 90.dp

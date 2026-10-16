@@ -1,0 +1,6 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+  <string name="oura_overview">Alle Oura-Werte</string>
+  <string name="oura_overview_range">Ein Zeitraum gilt für alle Werte und Diagramme unten. Werte sind Mittelwerte vorhandener Messungen; ein Strich bedeutet keine Messungen in diesem Zeitraum.</string>
+  <string name="oura_chart_details">Detaillierte Diagramme</string>
+</resources>

@@ -1,0 +1,10 @@
+<resources>
+    <string name="oura_delivery_title">Réception FC en direct · fenêtre conservée</string>
+    <string name="oura_delivery_counts">Mesures %1$d · Notifications %2$s · Plus grand groupe par notification %3$s</string>
+    <string name="oura_delivery_gaps">Intervalles de réception (ms) : dernier %1$s · min %2$s · max %3$s</string>
+    <string name="oura_delivery_queue">File des callbacks (ms) : dernier %1$s · max %2$s</string>
+    <string name="oura_delivery_reordered">Horodatages de réception désordonnés : %1$d</string>
+    <string name="oura_delivery_note">Jusqu’à 60 secondes de mesures conservées. Les intervalles mesurent l’arrivée des callbacks sur le téléphone. L’attente mesure le temps entre cette arrivée et le début du traitement. Aucun ne donne l’heure de mesure de la bague ni le délai de transit Bluetooth. Une notification peut regrouper plusieurs mesures ; des callbacks distincts peuvent aussi arriver en rafale.</string>
+    <string name="oura_delivery_candidate">Un champ d’âge possible existe dans les octets FC bruts 3–4 après la sous-opération, mais son unité et sa référence ne sont pas validées. Il n’est pas soustrait à l’heure de réception.</string>
+    <string name="oura_delivery_axis">Heure de réception du téléphone</string>
+</resources>

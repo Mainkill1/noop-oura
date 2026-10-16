@@ -216,6 +216,27 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      *  coordinator so it can only ever reach the ring that is the live source. */
     fun reconnectOuraRing() = noopApp.sourceCoordinator.reconnectActiveRing()
 
+    /** Read-only configuration report; an enabled mode is not evidence of an oxygen sample. */
+    val ouraOxygenFeatureStatus: StateFlow<com.noop.oura.OuraFeatureStatus?>
+        get() = noopApp.sourceCoordinator.ouraOxygenFeatureStatus
+    val ouraRawInstruments: StateFlow<com.noop.ble.OuraRawState>
+        get() = noopApp.sourceCoordinator.ouraRawInstruments
+    fun rawOuraIntent(sourceId: String, incarnation: Long, generation: Long, channel: String?, intervalMs: Long, foreground: Boolean) =
+        noopApp.sourceCoordinator.rawOuraIntent(sourceId, incarnation, generation, channel, intervalMs, foreground)
+    /** Direct notification buffers for a page-owned live session; no database polling. */
+    val ouraLiveSession: StateFlow<com.noop.ble.OuraLiveSessionSnapshot>
+        get() = noopApp.sourceCoordinator.ouraLiveSession
+    val ouraHistorySyncPhase: StateFlow<com.noop.ble.OuraHistorySyncPhase>
+        get() = noopApp.sourceCoordinator.ouraHistorySyncPhase
+    val ouraHistoryTransfer: StateFlow<com.noop.ble.OuraHistoryTransferSnapshot>
+        get() = noopApp.sourceCoordinator.ouraHistoryTransfer
+    fun startOuraLiveSession(selection: com.noop.ble.OuraLiveSelection, expectedSourceDeviceId: String, expectedGeneration: Long) =
+        noopApp.sourceCoordinator.startOuraLiveSession(selection, expectedSourceDeviceId, expectedGeneration)
+    fun updateOuraLiveSession(selection: com.noop.ble.OuraLiveSelection, expectedSourceDeviceId: String, expectedGeneration: Long) =
+        noopApp.sourceCoordinator.updateOuraLiveSession(selection, expectedSourceDeviceId, expectedGeneration)
+    fun stopOuraLiveSession(expectedSourceDeviceId: String, expectedGeneration: Long) =
+        noopApp.sourceCoordinator.stopOuraLiveSession(expectedSourceDeviceId, expectedGeneration)
+
     /** WHOOP-style day streak (#569): consecutive local days that carry a Charge score, computed on
      *  device from the merged daily metrics. A day "qualifies" when its [com.noop.data.DailyMetric] has a
      *  non-null `recovery`. Pure math lives in [com.noop.analytics.StreakCalculator] (Swift/Kotlin twin). */

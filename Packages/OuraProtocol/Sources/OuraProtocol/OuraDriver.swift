@@ -260,13 +260,13 @@ public final class OuraDriver {
 
     /// Convert a record's ring-clock timestamp to unix seconds using the current session's anchor
     /// (OURA_PROTOCOL.md s5.5). Returns nil when no anchor has arrived yet this session, so the caller
-    /// can honestly fall back (e.g. to wall-clock arrival time) instead of guessing.
+    /// can retain the record for an anchor or retry without guessing a historical time.
     public func unixSeconds(forRingTimestamp rt: UInt32) -> Int? {
         guard let anchorUtcMs, let anchorRingTime else { return nil }
         let deltaTicks = Int64(rt) - Int64(anchorRingTime)
         let ms = anchorUtcMs + deltaTicks * 100   // default 100 ms/tick (s5.5); bounded input, no overflow
         // #968: a corrupt/misaligned ring timestamp (seen on a full cursor=0 history dump) can convert to
-        // an implausible epoch; return nil so the caller falls back to arrival time instead of banking it.
+        // an implausible epoch; return nil so the caller retains or retries it without banking a guessed time.
         //
         // #1073: a banked SAMPLE is always in the past, so its upper bound is "now", NOT the 2020-2035
         // anchor window. That window is the right screen for ADOPTING a clock anchor and far too generous

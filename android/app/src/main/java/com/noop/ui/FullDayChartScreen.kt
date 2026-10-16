@@ -431,7 +431,15 @@ private suspend fun readTimeline(
         }
         TimelineMetric.Spo2 ->
             runCatching { repo.spo2Samples(deviceId, from, to, 200_000) }.getOrDefault(emptyList())
-                .mapNotNull { if (it.ir > 0) TimelinePoint(it.ts, it.red.toDouble() / it.ir) else null }
+                .mapNotNull { row ->
+                    // Match Repository.spo2TimelineValue: Oura stores one channel, with ir = 0.
+                    // Keep its uncalibrated overshoot visible; only reject legacy DC-channel values.
+                    val value = if (row.ir > 0) row.red.toDouble() / row.ir
+                        else row.red.toDouble().takeIf {
+                            row.red in com.noop.analytics.AnalyticsEngine.SPO2_SINGLE_CHANNEL_PLAUSIBLE
+                        }
+                    value?.let { TimelinePoint(row.ts, it) }
+                }
         TimelineMetric.SkinTemp -> {
             // #938: family-aware raw→°C — 5/MG centidegrees (raw/100, #156), a WHOOP 4.0 v24 raw ADC map.
             // The registry-model-label → family mapping lives in DeviceFamily.forRegistryDevice (#171).

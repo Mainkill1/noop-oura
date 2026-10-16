@@ -64,6 +64,25 @@ object OuraInstallKeyStore {
         return true
     }
 
+    /** Export only ring credentials; adoption markers and unrelated preferences are excluded. */
+    fun exportKeys(ctx: Context): List<com.noop.ingest.OuraKeyXml.Entry> =
+        prefs(ctx).all.keys.filter { it.startsWith(KEY_PREFIX) }.mapNotNull { name ->
+            val id = name.removePrefix(KEY_PREFIX)
+            load(ctx, id)?.let { com.noop.ingest.OuraKeyXml.Entry(id, it) }
+        }
+
+    /** Commit a validated batch together, without importing adoption intent. */
+    fun importKeys(ctx: Context, entries: List<com.noop.ingest.OuraKeyXml.Entry>): Boolean {
+        if (entries.isEmpty() || entries.map { it.deviceId }.distinct().size != entries.size ||
+            entries.any { it.deviceId.isBlank() || it.key.size != KEY_LENGTH || it.key.any { b -> b !in 0..255 } }) return false
+        val editor = prefs(ctx).edit()
+        entries.forEach { entry ->
+            editor.putString(prefKey(entry.deviceId), Base64.encodeToString(ByteArray(KEY_LENGTH) { entry.key[it].toByte() }, Base64.NO_WRAP))
+            editor.remove(adoptKey(entry.deviceId))
+        }
+        return editor.commit()
+    }
+
     /**
      * Read the stored 16-byte install key for [deviceId] as unsigned bytes 0..255, or null when none is
      * stored (or a stored value is the wrong length / unreadable). null is the honest signal that drives

@@ -4,17 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/**
- * The bottom bar's tab set, and the one rule about it that nothing enforced (#2218).
- *
- * Promoting Coach to a tab was a four-part change, and the part that nearly shipped wrong was leaving
- * it in the More sheet as well, so one destination would have appeared in two places at once. That is
- * not a thing a reader spots: the two lists sit four hundred lines apart and neither mentions the
- * other. It is exactly a thing a test spots.
- *
- * Pure data, so this runs in the plain-JVM suite. There is no Compose-capable harness in this repo, so
- * nothing here can assert what the bar RENDERS; what it can assert is the rule the rendering depends on.
- */
+/** Navigation destinations remain unique, labeled, and disjoint from the More menu. */
 class BottomBarTabsTest {
 
     private val barTabs = barLeadingTabs + barTrailingTabs
@@ -27,11 +17,11 @@ class BottomBarTabsTest {
         assertTrue("a bar tab must not also appear in the More sheet, found $both", both.isEmpty())
     }
 
-    /** Matching iOS: Today, Trends, Sleep, Coach, then More, which the bar appends itself. */
+    /** Oura is a primary destination, not hidden in a collapsed More group. */
     @Test
-    fun theBarCarriesTheSameFourNamedTabsAsIOS() {
+    fun ouraIsDirectlyReachableFromTheMainBar() {
         assertEquals(
-            listOf(Destination.Today, Destination.Trends, Destination.Sleep, Destination.Coach),
+            listOf(Destination.Today, Destination.Oura, Destination.Trends, Destination.Sleep),
             barTabs.map { it.dest },
         )
     }

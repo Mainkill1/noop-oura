@@ -302,6 +302,11 @@ The app always tells you what's live now versus still building, both in onboardi
 
 ### Oura ring support
 
+This fork adds a dedicated **Oura** page under **More → Data** in the Android app.
+It separates each ring from imported history, adds median-decimated charts with optional range bands,
+and brings oxygen, temperature, ring summaries, movement, battery, and sleep into one place.
+See [Oura dashboard](docs/OURA_DASHBOARD.md) for data coverage, graph behavior, and verification status.
+
 NOOP has **experimental, clean-room** support for the **Oura Ring**. It is not a supported strap and
 it is not on the same footing as a WHOOP 4.0: it lives behind the experimental-device path in the
 pairing wizard, and parts of it are permanently limited by what the ring will hand over. It reads real
@@ -621,6 +626,7 @@ That's it — copy away.
 - [`DISCLAIMER.md`](DISCLAIMER.md) — trademark, interoperability, and medical/legal notice.
 - [`ATTRIBUTION.md`](ATTRIBUTION.md) — full credits and licensing notes.
 - [`docs/SCOPE.md`](docs/SCOPE.md) — which WHOOP-app features stay out of scope (and why) versus their local, on-device equivalents.
+- [Oura communication wiki](docs/oura-wiki/Home.md) — known ring channels, history extraction, timing, BLE throughput and explicitly unvalidated official-app findings.
 - [`project.yml`](project.yml) — XcodeGen project definition (source of `Strand.xcodeproj`).
 
 ---

@@ -1,0 +1,17 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+  <string name="oura_keys_title">Transferir claves del anillo</string>
+  <string name="oura_keys_import">Importar XML de claves</string>
+  <string name="oura_keys_export">Exportar claves del anillo</string>
+  <string name="oura_keys_description">Transfiere las credenciales del anillo entre apps NOOP con noop_oura_secure_prefs.xml. Importa antes de conectar el anillo o selecciona el XML en la configuración avanzada al añadirlo.</string>
+  <string name="oura_keys_sensitive">El XML portátil contiene claves del anillo legibles. Guárdalo de forma privada y elimina las copias sobrantes después de importarlo.</string>
+  <string name="oura_keys_encrypted">Esta copia está cifrada con el Android Keystore de otra app. Usa Oura Key Exporter con root mientras la app original siga instalada y luego importa el XML exportado.</string>
+  <string name="oura_keys_invalid">No se encontraron claves válidas. Selecciona una exportación completa de noop_oura_secure_prefs.xml con claves de instalación de 16 bytes.</string>
+  <string name="oura_keys_review">¿Importar estas claves? Se reemplazarán las claves existentes de los anillos indicados.</string>
+  <string name="oura_keys_restore">Importar claves indicadas</string>
+  <string name="oura_keys_restored">Claves importadas. Ya puedes añadir el anillo mediante la configuración avanzada sin restablecerlo.</string>
+  <string name="oura_keys_saved">XML de claves guardado.</string>
+  <string name="oura_keys_failed">No se pudieron guardar las claves. Inténtalo de nuevo.</string>
+  <string name="oura_keys_empty">Esta app no tiene claves de anillo guardadas.</string>
+  <string name="oura_keys_done">Listo</string>
+</resources>

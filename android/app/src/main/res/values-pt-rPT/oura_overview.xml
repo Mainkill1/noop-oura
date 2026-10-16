@@ -1,0 +1,6 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+  <string name="oura_overview">Todas as estatísticas Oura</string>
+  <string name="oura_overview_range">O mesmo intervalo aplica-se a todas as estatísticas e gráficos. Os valores são médias das leituras disponíveis; um traço indica que não há leituras neste intervalo.</string>
+  <string name="oura_chart_details">Gráficos detalhados</string>
+</resources>

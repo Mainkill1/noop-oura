@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="oura_details_close">Cerrar</string>
+    <string name="oura_details_open">Ver detalles</string>
+    <string name="oura_smoothing">Suavizado</string>
+    <string name="oura_smoothing_off">No</string>
+    <string name="oura_detail_summary">Mín. %1$s · Máx. %2$s · Media %3$s</string>
+    <string name="oura_detail_latest_measurement">Última marca temporal guardada: %1$s</string>
+    <string name="oura_detail_calculation">Las estadísticas usan los valores originales guardados. La línea sin suavizar muestra la mediana de cada intervalo. Los intervalos sin datos quedan vacíos.</string>
+    <string name="oura_detail_smoothing">El suavizado promedia hasta %1$d medianas consecutivas. Se reinicia tras los huecos y no altera las lecturas guardadas, las estadísticas ni los valores inspeccionados.</string>
+    <string name="oura_detail_source">Fuente: %1$s</string>
+    <string name="oura_detail_loaded">Datos locales cargados: %1$s</string>
+    <string name="oura_detail_download_unknown">La hora de descarga no se guarda con estas lecturas. Los totales diarios importados y las capturas en directo tienen sus propias referencias temporales; estos datos no reconstruyen la hora de descarga.</string>
+    <string name="oura_detail_live_summary">%1$s · Mín. %2$s · Máx. %3$s · Media %4$s · %5$d observaciones</string>
+    <string name="oura_detail_live_window">Las estadísticas en directo describen las observaciones originales retenidas, hasta 60 segundos. El suavizado solo cambia la visualización. La hora de recepción no es la de medición del anillo.</string>
+    <string name="oura_detail_latest_value">Último %1$s</string>
+</resources>

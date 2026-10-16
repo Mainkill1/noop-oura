@@ -592,8 +592,10 @@ class WhoopRepository(
         val fillFrom = fillTs.minOrNull()
         val fillTo = fillTs.maxOrNull()
         if (fillFrom != null && fillTo != null) dao.flagWhoop5RrFill(deviceId, fillFrom, fillTo)
-        val evIds = if (streams.events.isEmpty()) emptyList() else
-            dao.insertEvents(streams.events.map { EventRow(deviceId, it.ts, it.kind, it.payloadJSON) })
+        val eventRows = streams.events.map { EventRow(deviceId, it.ts, it.kind, it.payloadJSON) }
+        val (liveMotionRows, ordinaryEvents) = eventRows.partition { it.kind == com.noop.oura.OuraLiveMotionSummary.EVENT_KIND }
+        val evIds = (if (ordinaryEvents.isEmpty()) emptyList() else dao.insertEvents(ordinaryEvents)) +
+            liveMotionRows.map { dao.mergeLiveMotion(it) }
         val batIds = if (streams.battery.isEmpty()) emptyList() else
             dao.insertBattery(streams.battery.map { BatterySample(deviceId, it.ts, it.soc, it.mv, it.charging) })
         val spo2Ids = if (streams.spo2.isEmpty()) emptyList() else

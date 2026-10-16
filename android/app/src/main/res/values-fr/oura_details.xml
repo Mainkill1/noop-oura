@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="oura_details_close">Fermer</string>
+    <string name="oura_details_open">Voir les détails</string>
+    <string name="oura_smoothing">Lissage</string>
+    <string name="oura_smoothing_off">Non</string>
+    <string name="oura_detail_summary">Min. %1$s · Max. %2$s · Moyenne %3$s</string>
+    <string name="oura_detail_latest_measurement">Dernier horodatage enregistré : %1$s</string>
+    <string name="oura_detail_calculation">Les statistiques utilisent les valeurs enregistrées d’origine. La courbe non lissée montre la médiane de chaque intervalle. Les intervalles sans données restent vides.</string>
+    <string name="oura_detail_smoothing">Le lissage moyenne jusqu’à %1$d médianes consécutives. Il se réinitialise après une lacune et ne modifie ni les relevés enregistrés, ni les statistiques, ni les valeurs inspectées.</string>
+    <string name="oura_detail_source">Source : %1$s</string>
+    <string name="oura_detail_loaded">Données locales chargées : %1$s</string>
+    <string name="oura_detail_download_unknown">Les heures de téléchargement ne sont pas enregistrées avec ces relevés. Les totaux journaliers importés et les captures en direct ont leurs propres repères temporels ; ces données ne reconstituent pas les heures de téléchargement.</string>
+    <string name="oura_detail_live_summary">%1$s · Min. %2$s · Max. %3$s · Moyenne %4$s · %5$d observations</string>
+    <string name="oura_detail_live_window">Les statistiques en direct décrivent les observations d’origine conservées, jusqu’à 60 secondes. Le lissage modifie seulement l’affichage. L’heure de réception diffère de celle de mesure.</string>
+    <string name="oura_detail_latest_value">Dernier %1$s</string>
+</resources>

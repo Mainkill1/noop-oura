@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="oura_details_close">Fechar</string>
+    <string name="oura_details_open">Ver detalhes</string>
+    <string name="oura_smoothing">Suavização</string>
+    <string name="oura_smoothing_off">Não</string>
+    <string name="oura_detail_summary">Mín. %1$s · Máx. %2$s · Média %3$s</string>
+    <string name="oura_detail_latest_measurement">Última marca temporal guardada: %1$s</string>
+    <string name="oura_detail_calculation">As estatísticas usam os valores originais guardados. A linha sem suavização mostra a mediana de cada intervalo. Os intervalos sem dados ficam vazios.</string>
+    <string name="oura_detail_smoothing">A suavização calcula a média de até %1$d medianas consecutivas. Reinicia após lacunas e não altera leituras guardadas, estatísticas ou valores inspecionados.</string>
+    <string name="oura_detail_source">Origem: %1$s</string>
+    <string name="oura_detail_loaded">Dados locais carregados: %1$s</string>
+    <string name="oura_detail_download_unknown">As horas de transferência não são guardadas com estas leituras. Os totais diários importados e as capturas em direto têm referências temporais próprias; estes dados não reconstituem horas de transferência.</string>
+    <string name="oura_detail_live_summary">%1$s · Mín. %2$s · Máx. %3$s · Média %4$s · %5$d observações</string>
+    <string name="oura_detail_live_window">As estatísticas em direto descrevem as observações originais retidas, até 60 segundos. A suavização apenas muda a apresentação. A hora de receção é diferente da hora de medição.</string>
+    <string name="oura_detail_latest_value">Último %1$s</string>
+</resources>

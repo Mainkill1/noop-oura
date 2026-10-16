@@ -7,8 +7,8 @@ plugins {
 }
 
 // Optional release signing. Credentials live in `keystore.properties` (git-ignored, never
-// committed); when it's absent — clones, CI without secrets — release falls back to the debug
-// key so `assembleRelease` always produces an installable APK. See docs/BUILD.md.
+// committed). Genuine releases require it; an explicit staging build may use the debug key
+// under the separate staging application id. See docs/BUILD.md.
 val keystorePropsFile = rootProject.file("keystore.properties")
 val keystoreProps = Properties().apply {
     if (keystorePropsFile.exists()) keystorePropsFile.inputStream().use { load(it) }
@@ -26,8 +26,8 @@ android {
         applicationId = "com.noop.whoop"
         minSdk = 26
         targetSdk = 34
-        versionCode = 556
-        versionName = "12.1.0"
+        versionCode = 569
+        versionName = "12.5.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -116,6 +116,8 @@ android {
             buildConfigField("boolean", "ENABLE_DEMO", "true")
         }
     }
+
+    sourceSets.getByName("main").java.srcDir("../key-transfer/src/main/java")
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -248,6 +250,7 @@ dependencyLocking {
 }
 
 dependencies {
+    implementation("com.google.crypto.tink:tink-android:1.8.0")
     // --- Compose (BOM pins all Compose artifact versions in lockstep) ---
     val composeBom = platform("androidx.compose:compose-bom:2024.06.00")
     implementation(composeBom)
@@ -301,9 +304,13 @@ dependencies {
     testImplementation("org.xerial:sqlite-jdbc:3.41.2.2") // execute DAO aggregate SQL in plain-JVM tests
     testImplementation("androidx.room:room-testing:$roomVersion") // create a prior DB from exported schemas
     testImplementation("org.robolectric:robolectric:4.13") // run the real Room open/migration in Linux CI (#1803)
-    androidTestImplementation("androidx.test.ext:junit:1.1.5")
-    androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
+    androidTestImplementation("androidx.test.ext:junit:1.3.0")
+    // 3.7 uses the supported InputManager service on Android 16.
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    // AGP aligns the instrumented runtime with the app's Kotlin version. Keep this module
+    // explicit so lock generation includes it even before that alignment is applied.
+    androidTestImplementation("org.jetbrains.kotlin:kotlin-stdlib-common:1.9.24")
 
     // --- Compose tooling (debug-only) ---
     debugImplementation("androidx.compose.ui:ui-tooling")

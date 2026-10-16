@@ -1,0 +1,18 @@
+<resources>
+    <string name="oura_transfer_title">Dernier transfert historique observé</string>
+    <string name="oura_transfer_active">Transfert historique en cours</string>
+    <string name="oura_transfer_complete">Transfert historique terminé</string>
+    <string name="oura_transfer_yielded">Historique suspendu pour le direct</string>
+    <string name="oura_transfer_stopped">Transfert historique interrompu</string>
+    <string name="oura_transfer_disconnected">Déconnexion pendant le transfert historique</string>
+    <string name="oura_transfer_started">Début : %1$s</string>
+    <string name="oura_transfer_ended">Fin : %1$s</string>
+    <string name="oura_transfer_rate">Période %1$.1f s · Reçus %2$d B · %3$.1f B/s</string>
+    <string name="oura_transfer_notifications">Notifications %1$d · Maximum %2$d B</string>
+    <string name="oura_transfer_sizes">Charges utiles : ≤20 B %1$d · 21–100 B %2$d · &gt;100 B %3$d</string>
+    <string name="oura_transfer_frames">Trames externes complètes %1$d · Notifications à plusieurs trames %2$d</string>
+    <string name="oura_transfer_records">Enveloppes de données %1$d · Événements décodés de ces données %2$d</string>
+    <string name="oura_transfer_link">MTU %1$d · TX PHY %2$s · RX PHY %3$s</string>
+    <string name="oura_transfer_priority">Accélération demandée : %1$s · Priorité haute acceptée : %2$s · Priorité équilibrée acceptée : %3$s · Restauration PHY soumise : %4$s</string>
+    <string name="oura_transfer_note">Cette connexion uniquement ; non conservé au redémarrage. Inclut le trafic de contrôle et les temps calmes. Ces nombres ne sont pas des mesures uniques enregistrées. Une demande acceptée ne garantit pas une liaison plus rapide.</string>
+</resources>

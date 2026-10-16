@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="oura_chart_zoom_in">Agrandir</string>
+    <string name="oura_chart_zoom_out">Réduire</string>
+    <string name="oura_chart_reset">Réinitialiser la vue</string>
+    <string name="oura_chart_extra_scale">%1$s · bas %2$s · milieu %3$s · haut %4$s %5$s</string>
+    <string name="oura_chart_zoom_amount">%1$s× · vue fixe</string>
+    <string name="oura_chart_gestures">Toucher ou glisser pour examiner · Pincer pour zoomer · Deux doigts pour déplacer</string>
+    <string name="oura_chart_record_time">Heure du relevé</string>
+    <string name="oura_temperature_recorded_only">Température cutanée · enregistrée seulement</string>
+    <string name="oura_temperature_live_unavailable">Aucune mesure validée de température cutanée en direct. Ouvrir Historique pour consulter la température enregistrée.</string>
+</resources>

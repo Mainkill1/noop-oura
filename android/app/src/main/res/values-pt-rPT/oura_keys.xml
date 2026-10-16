@@ -1,0 +1,17 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+  <string name="oura_keys_title">Transferir chaves do anel</string>
+  <string name="oura_keys_import">Importar XML de chaves</string>
+  <string name="oura_keys_export">Exportar chaves do anel</string>
+  <string name="oura_keys_description">Transfira as credenciais do anel entre apps NOOP com noop_oura_secure_prefs.xml. Importe antes de ligar o anel ou selecione o XML na configuração avançada ao adicioná-lo.</string>
+  <string name="oura_keys_sensitive">O XML portátil contém chaves legíveis do anel. Guarde-o em privado e elimine cópias adicionais após a importação.</string>
+  <string name="oura_keys_encrypted">Esta cópia está cifrada pelo Android Keystore de outra app. Use o Oura Key Exporter com root enquanto a app original estiver instalada e importe depois o XML exportado.</string>
+  <string name="oura_keys_invalid">Não foram encontradas chaves válidas. Selecione uma exportação completa de noop_oura_secure_prefs.xml com chaves de instalação de 16 bytes.</string>
+  <string name="oura_keys_review">Importar estas chaves? As chaves existentes dos anéis indicados serão substituídas.</string>
+  <string name="oura_keys_restore">Importar chaves indicadas</string>
+  <string name="oura_keys_restored">Chaves importadas. Pode adicionar o anel pela configuração avançada sem o repor.</string>
+  <string name="oura_keys_saved">XML de chaves guardado.</string>
+  <string name="oura_keys_failed">Não foi possível guardar as chaves. Tente novamente.</string>
+  <string name="oura_keys_empty">Não há chaves de anel guardadas nesta app.</string>
+  <string name="oura_keys_done">Concluído</string>
+</resources>

@@ -1,0 +1,6 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+  <string name="oura_overview">All Oura stats</string>
+  <string name="oura_overview_range">One date range applies to every stat and graph below. Values are averages of available readings; a dash means no readings in this range.</string>
+  <string name="oura_chart_details">Detailed graphs</string>
+</resources>

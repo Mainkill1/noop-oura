@@ -86,9 +86,13 @@ reverse-engineering resources below were consulted as **facts-only references** 
 service/characteristic UUIDs, framing and auth shapes); **no RE source code is copied** into NOOP.
 - **`open_ring`**: consulted for protocol facts only. Licensed **GPL-3.0**; NOOP copies none of
   its code and is not a derivative work of it.
-- **`open_oura`**, **`ringverse`**, **`relue`**: consulted for protocol facts only. These carry
-  **no license**, so NOOP treats them as reference documentation of observed behaviour only and
-  copies no code from them.
+- **`open_oura`**: consulted for protocol facts only. The reference pinned at
+  `e57c43ce5fe0cf9a646afa790bda3731be767507` carries an
+  [MIT license](https://github.com/Th0rgal/open_oura/blob/e57c43ce5fe0cf9a646afa790bda3731be767507/LICENSE).
+  NOOP copies no implementation code from it. The raw-instrument research boundary and conflicting
+  research-field descriptions are recorded in [Oura raw instruments](docs/OURA_RAW_INSTRUMENTS.md).
+- **`ringverse`**, **`relue`**: consulted for protocol facts only. These carry **no license**, so
+  NOOP treats them as reference documentation of observed behaviour only and copies no code from them.
 
 NOOP reads only the ring's own decoded raw signals and its own open event tags, computes NOOP's
 own Charge/Rest, and **never** reads or displays Oura's encrypted readiness or sleep scores. The
