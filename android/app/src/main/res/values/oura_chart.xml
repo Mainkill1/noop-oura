@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- SI seconds symbol is shared across locales. -->
+    <string name="oura_chart_seconds" translatable="false">%1$s s</string>
+    <string name="oura_chart_zoom_in">Zoom in</string>
+    <string name="oura_chart_zoom_out">Zoom out</string>
+    <string name="oura_chart_reset">Reset view</string>
+    <string name="oura_chart_extra_scale">%1$s · bottom %2$s · middle %3$s · top %4$s %5$s</string>
+    <string name="oura_chart_zoom_amount">%1$s× · view held</string>
+    <string name="oura_chart_gestures">Tap or drag to inspect · Pinch to zoom · Two fingers to pan</string>
+    <string name="oura_chart_record_time">Record time</string>
+    <string name="oura_temperature_recorded_only">Skin temperature · recorded only</string>
+    <string name="oura_temperature_live_unavailable">No validated live skin-temperature reading is available. Open History for recorded temperature.</string>
+</resources>

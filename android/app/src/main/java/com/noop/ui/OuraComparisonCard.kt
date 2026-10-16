@@ -1,8 +1,6 @@
 package com.noop.ui
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -13,12 +11,10 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.clipRect
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.*
-import androidx.compose.ui.text.style.TextAlign
 import com.noop.R
 import com.noop.analytics.OuraComparison
 import com.noop.analytics.SignalDecimation
@@ -44,6 +40,8 @@ internal fun OuraComparisonCard(keys: List<String>, signals: Map<String, SignalD
             signals[key] ?: SignalDecimation.Summary(), scale, offset), title, note, colors[index])
     }
     val axes = remember(traces) { OuraComparison.axes(traces.map { it.trace }) }
+    val viewport = rememberOuraChartViewport(from, to, from to to)
+    val visible = viewport.window
     val cursor = rememberSaveable { mutableStateOf<Long?>(null) }
     LaunchedEffect(from, to) { if (cursor.value?.let { it < from || it >= to } == true) cursor.value = null }
     val context = LocalContext.current
@@ -99,19 +97,28 @@ internal fun OuraComparisonCard(keys: List<String>, signals: Map<String, SignalD
                 OuraChartLegend(traces.mapIndexed { index, ui ->
                     OuraLegendEntry(ui.trace.id, ui.label, ui.trace.unit, ui.color, ouraComparisonTraceStyle(index))
                 })
-                // Bounds retain the corresponding signal names when quantities use separate scales.
-                axes.forEach { (id, axis) ->
+                val chartScales = axes.map { (id, axis) ->
                     val members = traces.filter { it.trace.axisId == id }
-                    Text(members.joinToString(" / ") { it.label } + ": " + stringResource(R.string.oura_compare_bounds,
-                        String.format(Locale.getDefault(), "%.1f", axis.minimum),
-                        String.format(Locale.getDefault(), "%.1f", axis.maximum), members.first().trace.unit),
-                        style = NoopType.captionNumber, color = Palette.textSecondary)
+                    OuraChartScale(members.joinToString(" / ") { it.label }, members.first().trace.unit,
+                        axis.minimum, axis.maximum, members.first().color)
                 }
-                OuraComparisonPlot(traces, axes, from, to, cursor, descriptions.joinToString("\n"),
-                    Modifier.fillMaxWidth().height(Metrics.largeChartHeight).testTag("oura-comparison-plot"), smoothing, { details = true })
-                Row(Modifier.fillMaxWidth()) {
-                    Text(time(from), Modifier.weight(1f), style = NoopType.captionNumber, color = Palette.textSecondary)
-                    Text(time(to), Modifier.weight(1f), style = NoopType.captionNumber, color = Palette.textSecondary, textAlign = TextAlign.End)
+                OuraChartFrame("oura-comparison-plot", chartScales, viewport, stringResource(R.string.oura_chart_record_time),
+                    { time(it).replace(" · ", "\n") }, large = true) { modifier ->
+                    OuraComparisonPlot(traces, axes, visible.from, visible.to, cursor, descriptions.joinToString("\n"),
+                        modifier.testTag("oura-comparison-plot"), smoothing, viewport)
+                }
+                Column(Modifier.testTag("oura-comparison-plot-readout"), verticalArrangement = Arrangement.spacedBy(Metrics.space4)) {
+                    if (cursor.value == null) Text(stringResource(R.string.oura_inspect), style = NoopType.caption, color = Palette.textSecondary)
+                    else {
+                        Text(time(cursor.value!!), style = NoopType.captionNumber, color = Palette.textSecondary)
+                        traces.forEach { ui ->
+                            val bucket = OuraComparison.bucketAt(ui.trace.summary.buckets, cursor.value!!)
+                            Text(ui.label, style = NoopType.caption, color = ui.color)
+                            Text(if (bucket == null) "—" else context.getString(R.string.oura_bucket_detail,
+                                value(ui.trace, bucket.median), value(ui.trace, bucket.minimum), value(ui.trace, bucket.maximum), bucket.count),
+                                style = NoopType.captionNumber, color = Palette.textPrimary)
+                        }
+                    }
                 }
 
             }
@@ -134,17 +141,18 @@ internal fun ouraComparisonDimension(key: String): String = when (key) {
 
 @Composable
 private fun OuraComparisonPlot(traces: List<OuraCompareTrace>, axes: Map<String, OuraComparison.Axis>,
-    from: Long, to: Long, cursor: MutableState<Long?>, description: String, modifier: Modifier, smoothing: Int, onInspect: () -> Unit) {
-    val anchors = remember(traces) { traces.flatMap { it.trace.summary.buckets.map { bucket -> bucket.start + (bucket.end - bucket.start) / 2 } }.distinct().sorted() }
+    from: Long, to: Long, cursor: MutableState<Long?>, description: String, modifier: Modifier, smoothing: Int, viewport: OuraChartViewport) {
+    val anchors = remember(traces, from, to) { traces.flatMap { it.trace.summary.buckets.map { bucket -> bucket.start + (bucket.end - bucket.start) / 2 } }.distinct().sorted().filter { it in from..to } }
     val previous = stringResource(R.string.oura_previous_reading)
     val next = stringResource(R.string.oura_next_reading)
     val title = stringResource(R.string.oura_compare_title)
-    val openLabel = stringResource(R.string.oura_details_open)
+    val inspectLabel = stringResource(R.string.oura_inspect)
+    val zoomActions = ouraChartZoomActions(viewport)
     Spacer(modifier.semantics {
         contentDescription = title
-        onClick(label = openLabel) { onInspect(); true }
+        onClick(label = inspectLabel) { if (cursor.value == null) cursor.value = viewport.at(.5f); true }
         stateDescription = description
-        customActions = listOf(
+        customActions = zoomActions + listOf(
             CustomAccessibilityAction(previous) {
                 val target = if (cursor.value == null) anchors.lastOrNull() else anchors.lastOrNull { it < cursor.value!! }
                 if (target == null) false else { cursor.value = target; true }
@@ -153,12 +161,7 @@ private fun OuraComparisonPlot(traces: List<OuraCompareTrace>, axes: Map<String,
                 val target = if (cursor.value == null) anchors.firstOrNull() else anchors.firstOrNull { it > cursor.value!! }
                 if (target == null) false else { cursor.value = target; true }
             })
-    }.pointerInput(from, to) {
-        detectTapGestures { cursor.value = from + ((it.x / size.width.coerceAtLeast(1)) * (to - from)).toLong().coerceIn(0, (to - from - 1).coerceAtLeast(0)); onInspect() }
-    }.pointerInput(from, to) {
-        fun inspect(x: Float) { cursor.value = from + ((x / size.width.coerceAtLeast(1)) * (to - from)).toLong().coerceIn(0, (to - from - 1).coerceAtLeast(0)) }
-        detectHorizontalDragGestures(onDragStart = { inspect(it.x) }, onDragEnd = onInspect) { change, _ -> change.consume(); inspect(change.position.x) }
-    }.drawWithCache {
+    }.ouraChartGestures(viewport) { cursor.value = it }.drawWithCache {
         fun x(ts: Long) = ((ts - from).toDouble() / (to - from).coerceAtLeast(1) * size.width).toFloat()
         fun point(ui: OuraCompareTrace, ts: Long, number: Double): Offset {
             val axis = axes.getValue(ui.trace.axisId)

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="oura_chart_zoom_in">Vergrößern</string>
+    <string name="oura_chart_zoom_out">Verkleinern</string>
+    <string name="oura_chart_reset">Ansicht zurücksetzen</string>
+    <string name="oura_chart_extra_scale">%1$s · unten %2$s · Mitte %3$s · oben %4$s %5$s</string>
+    <string name="oura_chart_zoom_amount">%1$s× · Ansicht angehalten</string>
+    <string name="oura_chart_gestures">Tippen oder ziehen zum Prüfen · Mit zwei Fingern zoomen und verschieben</string>
+    <string name="oura_chart_record_time">Aufzeichnungszeit</string>
+    <string name="oura_temperature_recorded_only">Hauttemperatur · nur aufgezeichnet</string>
+    <string name="oura_temperature_live_unavailable">Kein validierter Live-Wert für die Hauttemperatur verfügbar. Aufgezeichnete Temperatur im Verlauf öffnen.</string>
+</resources>

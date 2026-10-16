@@ -18,6 +18,11 @@ data class OuraLiveSessionSnapshot(val active: Boolean = false, val generation: 
 
 /** Notification-only, bounded session memory; historical events have no entry point here. */
 internal class OuraLiveSession {
+    companion object {
+        const val RETENTION_MS = 60_000L
+        const val MAX_RETAINED_SAMPLES = 6_000
+    }
+
     var snapshot = OuraLiveSessionSnapshot()
         private set
     private val hr = java.util.ArrayDeque<OuraLiveHrSample>()
@@ -79,7 +84,7 @@ internal class OuraLiveSession {
         return true
     }
     private fun <T> prune(samples: java.util.ArrayDeque<T>, now: Long, receipt: (T) -> Long) {
-        while (samples.isNotEmpty() && (samples.size > 6_000 || receipt(samples.first) < now - 60_000)) samples.removeFirst()
+        while (samples.isNotEmpty() && (samples.size > MAX_RETAINED_SAMPLES || receipt(samples.first) < now - RETENTION_MS)) samples.removeFirst()
     }
     private fun <T> stream(samples: List<T>, selected: Boolean, unavailable: Boolean, last: Long?, now: Long,
                            staleAfter: Long, receipt: (T) -> Long): OuraLiveStream<T> {

@@ -13,6 +13,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.*
 import com.noop.R
 import com.noop.ble.*
 import com.noop.oura.*
@@ -80,7 +81,8 @@ internal fun OuraRawPanel(state: OuraRawState, now: Long, channelKey: String, in
                 OuraRawDisplay.Graph -> {
                     val context = androidx.compose.ui.platform.LocalContext.current
                     OuraToolbar(listOf(false, true), smooth, { context.getString(if (it) R.string.oura_live_smoothed else R.string.oura_live_raw) }, { smooth = it })
-                    OuraRawGraph(selectedFields, values, smooth, { details = true })
+                    OuraRawGraph(selectedFields, values, smooth, listOf(state.sourceDeviceId, state.sourceIncarnation, channelKey, selected),
+                        when (channelKey) { "hr" -> 5000L; "motion" -> 1500L; else -> if (channel.acquisition == "poll") maxOf(5000L, intervalMs * 2) else 5000L })
                 }
                 else -> selectedFields.forEach { field ->
                     val stats = OuraRawInstruments.statistics(values[field.key].orEmpty().map { it.value })
@@ -151,36 +153,79 @@ internal fun <T> OuraRawDropdown(title: String, selection: T, items: List<T>, la
 }
 
 @Composable
-private fun OuraRawGraph(fields: List<OuraRawField>, values: Map<String, List<OuraLivePoint>>, smooth: Boolean, onDetails: () -> Unit) {
+private fun OuraRawGraph(fields: List<OuraRawField>, values: Map<String, List<OuraLivePoint>>, smooth: Boolean, identity: Any, receiptGapMs: Long) {
     val colors = listOf(Palette.accent, Palette.metricAmber, Palette.metricPurple)
     val points = values.values.flatten()
     if (points.isEmpty()) return
-    val from = points.minOfOrNull { it.elapsedMs } ?: 0L
-    val to = maxOf(from + 1000, points.maxOfOrNull { it.elapsedMs } ?: from)
-    val minimum = points.minOfOrNull { it.value } ?: 0.0
-    val observedMaximum = points.maxOfOrNull { it.value } ?: minimum
-    val maximum = maxOf(minimum + 1, observedMaximum)
+    val domainFrom = points.minOf { it.elapsedMs }
+    val domainTo = maxOf(domainFrom + 1000, points.maxOf { it.elapsedMs })
+    val viewport = rememberOuraChartViewport(domainFrom, domainTo, identity)
+    var cursor by remember(identity) { mutableStateOf<Long?>(null) }
+    val from = viewport.window.from
+    val to = viewport.window.to
+    val minimum = points.minOf { it.value }
+    val maximum = maxOf(minimum + 1, points.maxOf { it.value })
+    val unit = fields.firstOrNull()?.let { rawUnit(it.unit) } ?: ""
+    val anchors = points.map { it.elapsedMs }.distinct().sorted().filter { it in from..to }
+    fun inspect(at: Long) { cursor = at }
+    val inspectLabel = stringResource(R.string.oura_inspect)
+    val previous = stringResource(R.string.oura_previous_reading)
+    val next = stringResource(R.string.oura_next_reading)
+    val zoomActions = ouraChartZoomActions(viewport)
+    val description = fields.joinToString(" / ") { it.key }
+    val inspection = fields.map { field ->
+        val readings = cursor?.let { ouraLiveInspect(values[field.key].orEmpty(), it, receiptGapMs) }.orEmpty()
+        field.key + ": " + if (readings.isEmpty()) "—" else readings.joinToString(" / ") { rawNumber(it.value) + " " + unit }
+    }
+    val secondsFormat = stringResource(R.string.oura_chart_seconds)
     OuraChartLegend(fields.mapIndexed { index, field -> OuraLegendEntry(field.key, field.key, rawUnit(field.unit), colors[index % colors.size], ouraLiveTraceStyle(field.key), null) })
-    Text(stringResource(R.string.oura_raw_observed_range, rawNumber(minimum), rawNumber(observedMaximum), fields.firstOrNull()?.let { rawUnit(it.unit) } ?: ""), style = NoopType.captionNumber, color = Palette.textSecondary)
-    Spacer(Modifier.fillMaxWidth().height(Metrics.chartHeight).testTag("oura-raw-plot").clickable(onClickLabel = stringResource(R.string.oura_details_open), onClick = onDetails).drawWithCache {
+    OuraChartFrame("oura-raw-plot", listOf(OuraChartScale(description, unit, minimum, maximum, colors.first())), viewport,
+        stringResource(R.string.oura_delivery_axis), { ouraChartSeconds((it - domainTo) / 1000.0, secondsFormat) }) { modifier ->
+    Spacer(modifier.testTag("oura-raw-plot").semantics {
+        contentDescription = description
+        stateDescription = inspection.joinToString()
+        onClick(label = inspectLabel) { if (cursor == null) inspect(viewport.at(.5f)); true }
+        customActions = zoomActions + listOf(
+            CustomAccessibilityAction(previous) {
+                val target = if (cursor == null) anchors.lastOrNull() else anchors.lastOrNull { it < cursor!! }
+                if (target == null) false else { cursor = target; true }
+            },
+            CustomAccessibilityAction(next) {
+                val target = if (cursor == null) anchors.firstOrNull() else anchors.firstOrNull { it > cursor!! }
+                if (target == null) false else { cursor = target; true }
+            })
+    }.ouraChartGestures(viewport, ::inspect).drawWithCache {
         val stroke = Metrics.space2.toPx()
+        fun x(time: Long) = ((time - from).toDouble() / (to - from) * size.width).toFloat()
         val paths = fields.map { field ->
             val raw = values[field.key].orEmpty()
             val display = if (!smooth) raw else if (field.key == "hr") ouraLiveHrTrend(raw) else ouraLiveMotionTrend(raw)
-            Path().apply { display.forEachIndexed { index, point ->
-                val x = ((point.elapsedMs - from).toDouble() / (to - from) * size.width).toFloat()
-                val y = ((1 - (point.value - minimum) / (maximum - minimum)) * size.height).toFloat()
-                if (index == 0) moveTo(x, y) else lineTo(x, y)
-                if (display.size == 1) lineTo(x + stroke, y)
-            } }
+            ouraLiveSegments(display, from, to, size.width.toInt(), receiptGapMs).map { segment ->
+                Path().apply { segment.forEachIndexed { index, point ->
+                    val px = x(point.elapsedMs)
+                    val y = ((1 - (point.value - minimum) / (maximum - minimum)) * size.height).toFloat()
+                    if (index == 0) moveTo(px, y) else lineTo(px, y)
+                    if (segment.size == 1) lineTo(px + stroke, y)
+                } }
+            }
         }
         onDrawBehind { clipRect {
-            drawLine(Palette.hairline, Offset.Zero, Offset(0f, size.height), stroke)
-            drawLine(Palette.hairline, Offset(0f, size.height), Offset(size.width, size.height), stroke)
-            paths.forEachIndexed { index, path -> drawPath(path, colors[index % colors.size], style = ouraTraceStroke(ouraLiveTraceStyle(fields[index].key))) }
+            for (fraction in listOf(0f, .5f, 1f)) drawLine(Palette.hairline, Offset(0f, fraction * size.height), Offset(size.width, fraction * size.height))
+            paths.forEachIndexed { index, segments -> segments.forEach {
+                drawPath(it, colors[index % colors.size], style = ouraTraceStroke(ouraLiveTraceStyle(fields[index].key)))
+            } }
+            cursor?.let { drawLine(Palette.textSecondary, Offset(x(it), 0f), Offset(x(it), size.height), stroke) }
         } }
     })
-    Text(stringResource(R.string.oura_raw_receipt_axis, rawNumber((to - from) / 1000.0)), style = NoopType.caption, color = Palette.textSecondary)
+    }
+    Column(Modifier.testTag("oura-raw-plot-readout"), verticalArrangement = Arrangement.spacedBy(Metrics.space4)) {
+        if (cursor == null) Text(inspectLabel, style = NoopType.caption, color = Palette.textSecondary)
+        else {
+            Text(stringResource(R.string.oura_delivery_axis) + " · " + ouraChartSeconds((cursor!! - domainTo) / 1000.0, secondsFormat),
+                style = NoopType.captionNumber, color = Palette.textSecondary)
+            inspection.forEach { Text(it, style = NoopType.captionNumber, color = Palette.textPrimary) }
+        }
+    }
 }
 
 private fun rawNumber(value: Double) = String.format(Locale.getDefault(), "%.2f", value)

@@ -1,8 +1,6 @@
 package com.noop.ui
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -13,7 +11,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.clipRect
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -75,6 +72,7 @@ internal fun OuraLivePanel(snapshot: OuraLiveSessionSnapshot, nowElapsedMs: Long
             OuraHistorySyncPhase.PAUSED_FOR_LIVE -> R.string.oura_live_history_paused
             OuraHistorySyncPhase.IDLE -> R.string.oura_live_history_idle
         }), style = NoopType.caption, color = Palette.textSecondary)
+        if (category == OuraCategory.Health) Text(stringResource(R.string.oura_temperature_live_unavailable), style = NoopType.caption, color = Palette.textSecondary)
         Text(stringResource(R.string.oura_live_page_open), style = NoopType.caption, color = Palette.textSecondary)
         Text(stringResource(R.string.oura_live_smoothing_info), style = NoopType.caption, color = Palette.textSecondary)
         Text(stringResource(R.string.oura_detail_live_window), style = NoopType.caption, color = Palette.textSecondary)
@@ -119,6 +117,7 @@ internal fun OuraLivePanel(snapshot: OuraLiveSessionSnapshot, nowElapsedMs: Long
                     snapshot.hr.phase, snapshot.hr.lastReceiptElapsedMs, nowElapsedMs, { details = true })
                 if (category == OuraCategory.Health && eligible) {
                     OuraLiveOxygenStatus(oxygenMode.takeIf { connected }, onHistory)
+                    OuraLiveTemperatureStatus(onHistory)
                 }
                 if (category == OuraCategory.Movement || keys.any { it != "hr" } || snapshot.selection.motion) OuraLiveStreamReadout(
                     allTraces[1].copy(label = stringResource(R.string.oura_tab_movement), raw = emptyList()), snapshot.active,
@@ -135,16 +134,8 @@ internal fun OuraLivePanel(snapshot: OuraLiveSessionSnapshot, nowElapsedMs: Long
                     label = { context.getString(R.string.oura_live_window_seconds, it) }, onSelect = { windowSeconds = it },
                     modifier = Modifier.fillMaxWidth().testTag("oura-live-window"),
                     accessibilityLabel = stringResource(R.string.oura_window))
-                traces.groupBy { it.unit }.values.forEach { group ->
-                    Text(group.joinToString(" / ") { it.label } + ": " + formatLive(group.first().minimum) + " … " +
-                        formatLive(group.first().maximum) + " " + group.first().unit,
-                        style = NoopType.captionNumber, color = Palette.textSecondary)
-                }
                 OuraLivePlot(traces, ouraLivePlotEnd(snapshot, nowElapsedMs), windowSeconds,
-                    nowElapsedMs, snapshot.sourceDeviceId to snapshot.startedAtElapsedMs) {
-                    OuraLiveDeliveryDetails(snapshot.hr.samples)
-                    detailsContent()
-                }
+                    nowElapsedMs, snapshot.sourceDeviceId to snapshot.startedAtElapsedMs)
             }
         }
     }
@@ -174,32 +165,39 @@ private fun OuraLiveStreamReadout(trace: OuraLiveTrace, active: Boolean, connect
 
 private fun formatLive(value: Double): String = String.format(Locale.getDefault(), "%.1f", value)
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun OuraLivePlot(traces: List<OuraLiveTrace>, end: Long, seconds: Int, now: Long, sessionKey: Pair<String?, Long?>, detailsContent: @Composable () -> Unit) {
+private fun OuraLivePlot(traces: List<OuraLiveTrace>, end: Long, seconds: Int, now: Long, sessionKey: Pair<String?, Long?>) {
     var cursor by remember(sessionKey) { mutableStateOf<Long?>(null) }
-    var details by remember(sessionKey) { mutableStateOf(false) }
-    val from = end - seconds * 1000L
-    val currentFrom by rememberUpdatedState(from)
+    val availableFrom = ouraLiveAvailableFrom(traces.map { it.raw }, end)
+    val viewport = rememberOuraChartViewport(end - seconds * 1000L, end, sessionKey to seconds, availableFrom = availableFrom)
+    val secondsFormat = stringResource(R.string.oura_chart_seconds)
+    val from = viewport.window.from
+    val to = viewport.window.to
     val colors = traces.map { it.color }
     val title = if (traces.size == 1) traces.first().label else stringResource(R.string.oura_compare_title)
-    val openLabel = stringResource(R.string.oura_details_open)
+    val inspectLabel = stringResource(R.string.oura_inspect)
     val previous = stringResource(R.string.oura_previous_reading)
     val next = stringResource(R.string.oura_next_reading)
-    val anchors = remember(traces) { traces.flatMap { it.raw.map(OuraLivePoint::elapsedMs) }.distinct().sorted() }
+    val zoomActions = ouraChartZoomActions(viewport)
+    val anchors = remember(traces, from, to) { traces.flatMap { it.raw.map(OuraLivePoint::elapsedMs) }.distinct().sorted().filter { it in from..to } }
     val inspection = traces.map { trace ->
         val values = cursor?.let { ouraLiveInspect(trace.raw, it, trace.gapMs) }.orEmpty()
         trace.label + ": " + if (values.isEmpty()) "—" else values.joinToString(" / ") { formatLive(it.value) + " " + trace.unit }
     }
     OuraChartLegend(traces.map { trace ->
-        OuraLegendEntry(trace.key, trace.label, trace.unit, trace.color, ouraLiveTraceStyle(trace.key),
-            null)
+        OuraLegendEntry(trace.key, trace.label, trace.unit, trace.color, ouraLiveTraceStyle(trace.key), null)
     })
-    Spacer(Modifier.fillMaxWidth().height(Metrics.largeChartHeight).testTag("oura-live-plot").semantics {
+    val scales = traces.groupBy { it.unit }.values.map { group ->
+        val trace = group.first()
+        OuraChartScale(group.joinToString(" / ") { it.label }, trace.unit, trace.minimum, trace.maximum, trace.color)
+    }
+    OuraChartFrame("oura-live-plot", scales, viewport, stringResource(R.string.oura_delivery_axis),
+        { ouraChartSeconds((it - end) / 1000.0, secondsFormat) }, large = true) { modifier ->
+    Spacer(modifier.testTag("oura-live-plot").semantics {
         contentDescription = title
-        onClick(label = openLabel) { details = true; true }
+        onClick(label = inspectLabel) { if (cursor == null) cursor = viewport.at(.5f); true }
         stateDescription = inspection.joinToString()
-        customActions = listOf(
+        customActions = zoomActions + listOf(
             CustomAccessibilityAction(previous) {
                 val target = if (cursor == null) anchors.lastOrNull() else anchors.lastOrNull { it < cursor!! }
                 if (target == null) false else { cursor = target; true }
@@ -208,16 +206,11 @@ private fun OuraLivePlot(traces: List<OuraLiveTrace>, end: Long, seconds: Int, n
                 val target = if (cursor == null) anchors.firstOrNull() else anchors.firstOrNull { it > cursor!! }
                 if (target == null) false else { cursor = target; true }
             })
-    }.pointerInput(sessionKey, seconds) {
-        detectTapGestures { cursor = currentFrom + (it.x / size.width.coerceAtLeast(1) * seconds * 1000).toLong(); details = true }
-    }.pointerInput(sessionKey, seconds) {
-        fun inspect(x: Float) { cursor = currentFrom + (x / size.width.coerceAtLeast(1) * seconds * 1000).toLong() }
-        detectHorizontalDragGestures(onDragStart = { inspect(it.x) }, onDragEnd = { details = true }) { change, _ -> change.consume(); inspect(change.position.x) }
-    }.drawWithCache {
-        fun x(time: Long) = ((time - from).toDouble() / (seconds * 1000) * size.width).toFloat()
+    }.ouraChartGestures(viewport) { cursor = it }.drawWithCache {
+        fun x(time: Long) = ((time - from).toDouble() / (to - from).coerceAtLeast(1) * size.width).toFloat()
         val strokeWidth = Metrics.space2.toPx()
         val paths = traces.map { trace ->
-            ouraLiveSegments(trace.display, from, end, size.width.toInt().coerceAtLeast(1), trace.gapMs).map { segment ->
+            ouraLiveSegments(trace.display, from, to, size.width.toInt().coerceAtLeast(1), trace.gapMs).map { segment ->
                 val path = Path()
                 segment.forEachIndexed { index, point ->
                     val px = x(point.elapsedMs)
@@ -239,21 +232,15 @@ private fun OuraLivePlot(traces: List<OuraLiveTrace>, end: Long, seconds: Int, n
             }
         }
     })
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(stringResource(R.string.oura_live_relative_seconds, seconds), style = NoopType.captionNumber, color = Palette.textSecondary)
-        Text(stringResource(R.string.oura_delivery_axis), style = NoopType.caption, color = Palette.textSecondary)
     }
-    if (details) OuraDetailsDialog(title, { details = false }) {
+    Column(Modifier.testTag("oura-live-plot-readout"), verticalArrangement = Arrangement.spacedBy(Metrics.space4)) {
+        if (cursor == null) Text(inspectLabel, style = NoopType.caption, color = Palette.textSecondary)
         cursor?.let { at ->
             val age = ouraLiveAgeSeconds(at, now) ?: 0
             Text(pluralStringResource(R.plurals.oura_live_cursor_seconds, age.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(), age),
                 style = NoopType.captionNumber, color = Palette.textSecondary)
             inspection.forEach { Text(it, style = NoopType.captionNumber, color = Palette.textPrimary) }
         }
-        Text(stringResource(R.string.oura_detail_live_window), style = NoopType.caption, color = Palette.textSecondary)
-        Text(stringResource(R.string.oura_live_plot_info), style = NoopType.caption, color = Palette.textSecondary)
-        OuraLiveStatistics(traces)
-        detailsContent()
     }
 }
 

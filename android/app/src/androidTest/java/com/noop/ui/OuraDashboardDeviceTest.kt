@@ -165,10 +165,10 @@ class OuraDashboardDeviceTest {
         compose.onNodeWithTag("oura-history-smoothing").performSemanticsAction(SemanticsActions.SetProgress) { assertTrue(it(4f)) }
         val chart = compose.onNode(hasContentDescription("Test HR:", substring = true))
         chart.performTouchInput { click(percentOffset(0.15f, 0.5f)) }
-        compose.onNodeWithTag("oura-details-close").performClick()
+        compose.onNode(isDialog()).assertDoesNotExist()
         assertTrue(chart.fetchSemanticsNode().config[SemanticsProperties.StateDescription].contains("70.0 bpm"))
         chart.performTouchInput { click(percentOffset(0.5f, 0.5f)) }
-        compose.onNodeWithTag("oura-details-close").performClick()
+        compose.onNode(isDialog()).assertDoesNotExist()
         assertFalse(chart.fetchSemanticsNode().config[SemanticsProperties.StateDescription].contains("70.0 bpm"))
         val nextReading = chart.fetchSemanticsNode().config[SemanticsActions.CustomActions].last()
         compose.runOnIdle { assertTrue(nextReading.action()) }
@@ -176,8 +176,8 @@ class OuraDashboardDeviceTest {
         compose.runOnIdle { assertTrue(nextReading.action()) }
         assertTrue(chart.fetchSemanticsNode().config[SemanticsProperties.StateDescription].contains("90.0 bpm"))
         chart.performTouchInput { swipe(percentOffset(0.8f, 0.5f), percentOffset(0.15f, 0.5f)) }
-        compose.onNodeWithTag("oura-details-content").assertExists()
-        compose.onNodeWithTag("oura-details-close").performClick()
+        compose.onNodeWithTag("oura-details-content").assertDoesNotExist()
+        compose.onNode(isDialog()).assertDoesNotExist()
         assertTrue(chart.fetchSemanticsNode().config[SemanticsProperties.StateDescription].contains("70.0 bpm"))
         captureEvidence("chart-inspection")
     }

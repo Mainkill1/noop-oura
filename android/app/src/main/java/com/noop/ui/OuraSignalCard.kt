@@ -3,8 +3,6 @@ package com.noop.ui
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -13,10 +11,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -26,8 +22,6 @@ import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.onClick
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import com.noop.R
 import com.noop.analytics.SignalDecimation
 import java.time.Instant
@@ -46,6 +40,8 @@ internal fun OuraSignalCard(
     var smoothing by rememberSaveable(title) { mutableIntStateOf(0) }
     var details by rememberSaveable(title, from, to) { mutableStateOf(false) }
     val selected = remember(summary, from, to) { mutableIntStateOf(-1) }
+    val viewport = rememberOuraChartViewport(from, to, Triple(title, from, to))
+    val visible = viewport.window
     val buckets = summary.buckets
     val trend = remember(buckets, smoothing) { ouraHistoryTrend(buckets, smoothing) }
     val locale = Locale.getDefault()
@@ -67,7 +63,11 @@ internal fun OuraSignalCard(
     val dateFormat = remember(locale, zone) {
         DateTimeFormatter.ofLocalizedDate(FormatStyle.SHORT).withLocale(locale).withZone(zone)
     }
-    val axisFormat = if (to - from <= 25 * 3600L) timeFormat else dateFormat
+    val secondsFormat = remember(locale, zone, is24h) {
+        DateTimeFormatter.ofPattern(if (is24h) "HH:mm:ss" else "h:mm:ss a", locale).withZone(zone)
+    }
+    val axisTimeFormat = if (visible.span < 3600) secondsFormat else timeFormat
+    val multipleDates = dateFormat.format(Instant.ofEpochSecond(visible.from)) != dateFormat.format(Instant.ofEpochSecond(visible.to))
     val description = stringResource(R.string.oura_reading_counts, summary.count, buckets.size)
     val context = LocalContext.current
     val accessibleBuckets = remember(buckets, format, dateFormat, timeFormat, context) {
@@ -97,21 +97,16 @@ internal fun OuraSignalCard(
                     add(OuraLegendEntry("median", stringResource(if (smoothing == 0) R.string.oura_legend_median else R.string.oura_live_smoothed), unit, Palette.accent, OuraTraceStyle.Solid))
                     if (showRange) add(OuraLegendEntry("range", stringResource(R.string.oura_legend_range), unit, Palette.accent, OuraTraceStyle.Range))
                 })
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Metrics.space8)) {
-                    Column(Modifier.width(Metrics.chartAxisLabelWidth).height(Metrics.chartHeight), verticalArrangement = Arrangement.SpaceBetween) {
-                        Text(String.format(locale, "%.1f", domain.second), style = NoopType.captionNumber, color = Palette.textSecondary,
-                            maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(String.format(locale, "%.1f", domain.first), style = NoopType.captionNumber, color = Palette.textSecondary,
-                            maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                    OuraSignalPlot(buckets, trend, from, to, domain.first, domain.second, valueScale, valueOffset,
-                        showRange, selected, "$title: $description", accessibleBuckets, Modifier.weight(1f).height(Metrics.chartHeight),
-                        onInspect = { details = true })
+                OuraChartFrame("oura-history-plot", listOf(OuraChartScale(title, unit, domain.first, domain.second, Palette.accent)),
+                    viewport, stringResource(R.string.oura_chart_record_time), { ts ->
+                        val instant = Instant.ofEpochSecond(ts)
+                        (if (multipleDates) dateFormat.format(instant) + "\n" else "") + axisTimeFormat.format(instant)
+                    }) { plotModifier ->
+                    OuraSignalPlot(buckets, trend, visible.from, visible.to, domain.first, domain.second, valueScale, valueOffset,
+                        showRange, selected, "$title: $description", accessibleBuckets, plotModifier, viewport)
                 }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Metrics.space8)) {
-                    Text(axisFormat.format(Instant.ofEpochSecond(from)), Modifier.weight(1f), style = NoopType.caption, color = Palette.textSecondary)
-                    Text(axisFormat.format(Instant.ofEpochSecond(to)), Modifier.weight(1f), style = NoopType.caption,
-                        color = Palette.textSecondary, textAlign = TextAlign.End)
+                Column(Modifier.testTag("oura-history-plot-readout")) {
+                    OuraBucketReadout(buckets, selected, format, timeFormat, dateFormat)
                 }
 
             }
@@ -124,21 +119,21 @@ internal fun OuraSignalCard(
 private fun OuraSignalPlot(
     buckets: List<SignalDecimation.Bucket>, trend: List<Double>, from: Long, to: Long, yMin: Double, yMax: Double,
     valueScale: Double, valueOffset: Double, showRange: Boolean, selected: MutableIntState,
-    description: String, accessibleBuckets: List<String>, modifier: Modifier, onInspect: () -> Unit,
+    description: String, accessibleBuckets: List<String>, modifier: Modifier, viewport: OuraChartViewport,
 ) {
     val reduced = rememberReduceMotion()
     val bandAlpha = animateFloatAsState(if (showRange) StrandAlpha.selectedFill else 0f,
         animationSpec = if (reduced) tween(0) else NoopMotion.value())
-    val openLabel = stringResource(R.string.oura_details_open)
+    val zoomActions = ouraChartZoomActions(viewport)
     val inspectHint = stringResource(R.string.oura_inspect)
     val previous = stringResource(R.string.oura_previous_reading)
     val next = stringResource(R.string.oura_next_reading)
     Spacer(modifier.testTag("oura-history-plot")
         .semantics {
-            onClick(label = openLabel) { onInspect(); true }
+            onClick(label = inspectHint) { selected.intValue = com.noop.analytics.OuraComparison.indexAt(buckets, viewport.at(.5f)); true }
             contentDescription = description
             stateDescription = accessibleBuckets.getOrNull(selected.intValue) ?: inspectHint
-            customActions = listOf(
+            customActions = zoomActions + listOf(
                 CustomAccessibilityAction(previous) {
                     if (buckets.isEmpty() || selected.intValue == 0) false
                     else { selected.intValue = if (selected.intValue < 0) buckets.lastIndex else selected.intValue - 1; true }
@@ -149,23 +144,7 @@ private fun OuraSignalPlot(
                 },
             )
         }
-        .pointerInput(buckets, from, to, selected) {
-            fun inspect(x: Float) {
-                val ts = from + (x / size.width.coerceAtLeast(1) * (to - from)).toLong()
-                selected.intValue = com.noop.analytics.OuraComparison.indexAt(buckets, ts)
-            }
-            detectTapGestures { inspect(it.x); onInspect() }
-        }
-        .pointerInput(buckets, from, to, selected) {
-            fun inspect(x: Float) {
-                val ts = from + (x / size.width.coerceAtLeast(1) * (to - from)).toLong()
-                selected.intValue = com.noop.analytics.OuraComparison.indexAt(buckets, ts)
-            }
-            detectHorizontalDragGestures(onDragStart = { inspect(it.x) }, onDragEnd = onInspect) { change, _ ->
-                change.consume()
-                inspect(change.position.x)
-            }
-        }
+        .ouraChartGestures(viewport) { ts -> selected.intValue = com.noop.analytics.OuraComparison.indexAt(buckets, ts) }
         .drawWithCache {
             fun x(ts: Long) = ((ts - from).toDouble() / (to - from).coerceAtLeast(1) * size.width).toFloat()
             fun y(value: Double) = (size.height * (1 - (value * valueScale + valueOffset - yMin) / (yMax - yMin))).toFloat()
@@ -182,7 +161,7 @@ private fun OuraSignalPlot(
             }
             val stroke = ouraTraceStroke(OuraTraceStyle.Solid)
             val radius = Metrics.space2.toPx()
-            onDrawBehind {
+            onDrawBehind { clipRect {
                 for (fraction in listOf(0f, 0.5f, 1f)) {
                     drawLine(Palette.hairline, Offset(0f, size.height * fraction), Offset(size.width, size.height * fraction))
                 }
@@ -201,7 +180,7 @@ private fun OuraSignalPlot(
                     drawCircle(Palette.accent.copy(alpha = StrandAlpha.selectedFill), Metrics.space8.toPx(), point)
                     drawCircle(Palette.accent, Metrics.space4.toPx(), point)
                 }
-            }
+            } }
         })
 }
 

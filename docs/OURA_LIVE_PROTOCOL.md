@@ -247,3 +247,38 @@ Home and fresh receiving after a later Live re-entry. The first observation at a
 had no received value; the next observation showed a two-second-old receipt. The page remained
 active through that delay. After an earlier build 568 Live exit, the read-only status query returned
 mode 1 (automatic). The existing encrypted key preferences and release UID remained unchanged.
+
+## Inline chart inspection and time zoom
+
+The Android Oura graphs share local presentation controls: tap or horizontal single-finger drag
+inspects raw observations inline; pinch zooms the time axis; two-finger translation pans. A vertical
+single-finger gesture remains available to scroll the page. Graph inspection does not open a modal.
+Dedicated title/details controls retain acquisition, summary and delivery diagnostics.
+
+Visible y scales identify their quantities and units with lower/middle/upper grid values. The first
+two comparison quantities use edge rails; any additional distinct scales list their named grid values.
+Compatible XYZ channels share one scale. X labels follow the visible record-time range for History
+and phone-receipt time for Live/Raw. Zoom changes neither sampling demand nor stored data and does
+not invent intermediate observations. Reset returns to the selected full window and Live following.
+
+Skin temperature remains a recorded metric. The official-APK follow-up found a raw temperature-related
+HR tail, but no validated unit, calibration or skin origin; see the
+[candidate contract](oura-wiki/Official-app-protocol-candidates.md#live-hr-temperature-tail-is-not-calibrated-skin-temperature).
+That quantity is not represented as a calibrated Live measurement.
+
+
+Android 12.5.1 build 569 validation: 6,860 JVM cases passed (zero failures/errors, six existing
+skips), all 31 selected synthetic UI cases passed on the OnePlus 15, and signed Full Release
+assembly/vital lint plus Full Debug/instrumentation builds passed. Phone fixtures cover inline
+tap/drag without a dialog, genuine two-pointer pinch/pan/reset, visible time-range changes,
+vertical page scrolling, mixed-unit ticks at 2× text, held Live timing and Raw gaps. Retention
+regressions include count-cap eviction and preservation of another selected signal. Repository
+tools, parity acceptance, localization and source hygiene passed; independent review has no
+remaining source blocker. The signed update retains the existing UID and byte-identical encrypted
+ring preferences; authentication and a normal history completion were observed after installation.
+No new BLE command, physiological conversion, stored value or schema was introduced. The
+existing source-retention constants are shared with the Android charts without changing their values.
+
+The installed signed build also passed actual Oura Live Health tap/drag checks without opening a
+dialog. The phone displayed the recorded-temperature label and receipt-time axis, and later reported
+a zero-second-old Live receipt. The original screen timeout was restored and the debug app disabled.

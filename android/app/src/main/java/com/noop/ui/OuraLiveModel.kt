@@ -144,3 +144,11 @@ internal fun ouraLiveMotionTrend(raw: List<OuraLivePoint>): List<OuraLivePoint> 
         point.copy(value = sum / window.size)
     }
 }
+
+/** Presentation bounds follow the same retained sample window as the source owner. */
+internal fun ouraLiveAvailableFrom(series: List<List<OuraLivePoint>>, end: Long): Long {
+    val timedFloor = end - OuraLiveSession.RETENTION_MS
+    if (series.none { it.size >= OuraLiveSession.MAX_RETAINED_SAMPLES }) return timedFloor
+    val oldestSelected = series.asSequence().flatten().minOfOrNull { it.elapsedMs } ?: timedFloor
+    return maxOf(timedFloor, oldestSelected)
+}

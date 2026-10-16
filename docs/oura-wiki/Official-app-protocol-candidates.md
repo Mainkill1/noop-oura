@@ -95,3 +95,23 @@ they do not replace NOOP's canonical table without captures.
 
 Firmware, manufacturing, reset and airplane/power families remain excluded from execution.
 External HR-monitor or accessory support does not establish another ring sensor channel.
+
+## Live HR temperature tail is not calibrated skin temperature
+
+A separate, authorized static follow-up of the same 7.27.0 APK identified a temperature-related
+unsigned 16-bit little-endian quantity in the `0x28` daytime-HR body. With the feature identifier at
+body offset zero, the candidate offsets are 10–11 for the earlier interpretation and 11–12 for ring
+API 1.10.0 or later. This is the ring API version, not the app, firmware or retail-generation label.
+The read-only version reply `0x09` carries a candidate API triplet in its first three body bytes.
+Payload length alone does not establish the layout. A separately queried `0x25` reply has different
+header offsets and must not be treated as this push body.
+
+No unit, scaling, calibration, sentinel handling, physical sensor origin or measurement-time contract
+was established. Direct field consumers found in this review only construct, compare or format the
+quantity for diagnostics; the reviewed Live HR consumer uses IBI and phone time. This bounded
+negative finding does not rule out indirect or native consumers. It does not establish degrees
+Celsius, skin contact temperature, board temperature or a usable physiological measurement.
+
+Consequently NOOP keeps this as an unvalidated candidate. Live Health explicitly labels skin
+temperature as recorded-only, with access to existing temperature history. No new sensor command,
+conversion, stored metric or inferred live temperature was added.

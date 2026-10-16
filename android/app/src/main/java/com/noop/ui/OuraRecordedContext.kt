@@ -49,6 +49,14 @@ internal fun OuraLiveOxygenStatus(mode: Int?, onHistory: () -> Unit) {
     }
 }
 
+/** The uncalibrated HR-packet tail must not be presented as a live skin-temperature measurement. */
+@Composable
+internal fun OuraLiveTemperatureStatus(onHistory: () -> Unit) {
+    TextButton(onClick = onHistory, modifier = Modifier.testTag("oura-live-temperature-status")) {
+        Text(stringResource(R.string.oura_temperature_recorded_only), style = NoopType.caption, color = Palette.textSecondary)
+    }
+}
+
 /** Bounded inspection of stored seconds; full-range means remain in the History graphs. */
 @Composable
 internal fun OuraLiveMotionDetails(records: List<OuraLiveMotionHistory>, detailsContent: @Composable () -> Unit = {}) {

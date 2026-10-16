@@ -64,10 +64,10 @@ class OuraExplorerDeviceTest {
         plot.performTouchInput { click(percentOffset(0.15f, 0.5f)) }
         compose.onNodeWithText("Median 60.0 bpm · Range 60.0 bpm–60.0 bpm · 1 readings").assertExists()
         captureEvidence("explorer-comparison-inspection")
-        compose.onNodeWithTag("oura-details-close").performClick()
+        compose.onNode(isDialog()).assertDoesNotExist()
         plot.performTouchInput { click(percentOffset(0.5f, 0.5f)) }
         assertTrue(compose.onAllNodesWithText("—").fetchSemanticsNodes().size >= 4)
-        compose.onNodeWithTag("oura-details-close").performClick()
+        compose.onNode(isDialog()).assertDoesNotExist()
         val next = plot.fetchSemanticsNode().config[SemanticsActions.CustomActions].last()
         compose.runOnIdle { assertTrue(next.action()) }
         plot.performSemanticsAction(SemanticsActions.OnClick) { it() }

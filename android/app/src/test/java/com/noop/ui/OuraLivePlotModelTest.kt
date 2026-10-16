@@ -5,6 +5,13 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class OuraLivePlotModelTest {
+    @Test fun heldMotionViewportClampsAfterCountEvictionWithoutDiscardingAnotherSelectedSignal() {
+        val capped = (40001L..46000L).map { OuraLivePoint(it, 0.0) }
+        assertEquals(40001L, ouraLiveAvailableFrom(listOf(capped), 60000))
+        assertEquals(20000L, ouraLiveAvailableFrom(listOf(capped, listOf(OuraLivePoint(20000, 60.0))), 60000))
+        assertEquals(0L, ouraLiveAvailableFrom(listOf(listOf(OuraLivePoint(50000, 60.0))), 60000))
+    }
+
     @Test fun stoppedWindowFreezesAtLastActualReceiptAndOtherRingHasNoSamples() {
         val stopped = OuraLiveSessionSnapshot(sourceDeviceId = "a", hr = OuraLiveStream(
             samples = listOf(OuraLiveHrSample(12345, 68, null)), lastReceiptElapsedMs = 12345))
