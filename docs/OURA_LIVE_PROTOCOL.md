@@ -210,3 +210,40 @@ preferences and UID. Authentication succeeded, a new Live session received valid
 HR rows increased after exit. Control logs show ordered automatic-mode restoration then
 unsubscribe. Wireless ADB disconnected before the final ring-mode read-back; local command
 completion is not represented as proof of restored ring-side automatic operation.
+
+
+## Live receipt timing and burst inspection
+
+Android 12.5.0 build 568 retains notification ordinal and callback-to-owner timing alongside each
+volatile Live HR sample. The details popup reports receive-gap ranges, readings per notification,
+and local callback queue wait over the retained up-to-60-second window. Unknown metadata stays
+unknown; these diagnostics do not change protocol requests, stored data or HR calculation.
+The graph's time axis names phone receipt time. Several readings can share a callback, and separate
+callbacks can cluster without establishing measurement times. No guessed cadence is imposed.
+
+The official 7.27.0 static review identified a uint16LE candidate age at Live body 3–4, but no units,
+reference instant or sentinel behavior. The reviewed app does not use it to reconstruct Live time.
+It is documented as raw evidence, not decoded as milliseconds or subtracted from receipt. See
+[Live HR timing and delivery bursts](oura-wiki/Live-HR-timing-and-bursts.md).
+
+On the rooted OnePlus 15/Gen5 with build 567, Live resumed after the ring returned to range, produced
+fresh HR and persisted rows, stopped on Home with automatic-mode restoration/unsubscribe, and
+started a second receiving session on return. The ring then reported automatic mode 1 after leaving
+Live through a read-only feature-status query. This verifies the cleanup on hardware; it does not
+validate the candidate age or establish the cause of the separately reported delivery burst.
+
+
+Build 568 validation: all 6,851 Android JVM cases pass (six existing skips), signed Full Release
+assembly/vital lint and Full Debug/instrumentation builds pass, and all 23 selected synthetic phone
+UI cases pass, including the delivery popup at large text sizes. Independent delivery review has no
+blocking findings. Actual GATT-to-session-to-popup propagation was then observed on the Gen5:
+21 readings/21 notifications, largest group one, receive gaps 0–7,629 ms and maximum local callback
+queue wait 2 ms. The end-session log matched the popup. This demonstrates burst arrival evidence;
+it does not establish the sensor's measurement timestamps or Bluetooth transit latency.
+
+
+Final build 568 phone checks also observed automatic restart of the Live request on returning from
+Home and fresh receiving after a later Live re-entry. The first observation at about ten seconds
+had no received value; the next observation showed a two-second-old receipt. The page remained
+active through that delay. After an earlier build 568 Live exit, the read-only status query returned
+mode 1 (automatic). The existing encrypted key preferences and release UID remained unchanged.

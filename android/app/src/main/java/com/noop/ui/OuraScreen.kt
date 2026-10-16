@@ -202,6 +202,7 @@ fun OuraScreen(vm: AppViewModel, onDevices: () -> Unit, onImport: () -> Unit, on
                 liveEligible, ringLinkPhase == com.noop.ble.OuraLiveSource.LinkPhase.AUTHENTICATED, { rawChannel = it }, { rawInterval = it }, detailsContent = {
                     Text(stringResource(R.string.oura_detail_source, source?.name.orEmpty()), style = NoopType.subhead, color = Palette.textPrimary)
                     OuraHistoryTransferDetails(visibleTransfer)
+                    if (rawChannel == "hr") OuraLiveDeliveryDetails(visibleSession.hr.samples)
                 })
         }
         if (isLive) item(key = "live-panel:$sourceId", contentType = "live") {

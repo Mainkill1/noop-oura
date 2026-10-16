@@ -87,6 +87,7 @@ internal fun OuraLivePanel(snapshot: OuraLiveSessionSnapshot, nowElapsedMs: Long
                 style = NoopType.captionNumber, color = Palette.textSecondary)
         }
         OuraLiveStatistics(traces)
+        OuraLiveDeliveryDetails(snapshot.hr.samples)
         detailsContent()
     }
     OuraPanel {
@@ -140,7 +141,10 @@ internal fun OuraLivePanel(snapshot: OuraLiveSessionSnapshot, nowElapsedMs: Long
                         style = NoopType.captionNumber, color = Palette.textSecondary)
                 }
                 OuraLivePlot(traces, ouraLivePlotEnd(snapshot, nowElapsedMs), windowSeconds,
-                    nowElapsedMs, snapshot.sourceDeviceId to snapshot.startedAtElapsedMs, detailsContent)
+                    nowElapsedMs, snapshot.sourceDeviceId to snapshot.startedAtElapsedMs) {
+                    OuraLiveDeliveryDetails(snapshot.hr.samples)
+                    detailsContent()
+                }
             }
         }
     }
@@ -237,7 +241,7 @@ private fun OuraLivePlot(traces: List<OuraLiveTrace>, end: Long, seconds: Int, n
     })
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Text(stringResource(R.string.oura_live_relative_seconds, seconds), style = NoopType.captionNumber, color = Palette.textSecondary)
-        Text(stringResource(R.string.oura_live_window_end), style = NoopType.caption, color = Palette.textSecondary)
+        Text(stringResource(R.string.oura_delivery_axis), style = NoopType.caption, color = Palette.textSecondary)
     }
     if (details) OuraDetailsDialog(title, { details = false }) {
         cursor?.let { at ->

@@ -12,6 +12,7 @@ that every described feature is supported on every ring.
 | [Official-app protocol candidates](Official-app-protocol-candidates.md) | Newly identified bundling, extended history, connection policies and unvalidated limits |
 | [BLE transfer speed](BLE-transfer-speed.md) | MTU, PHY, connection parameters, notification packing and useful measurements |
 | [Timings and limits](Timings-and-limits.md) | Current NOOP budgets, observed cadences and their evidence |
+| [Live HR timing and delivery bursts](Live-HR-timing-and-bursts.md) | Receipt clocks, callback queue evidence and an unvalidated age field |
 | [Evidence and open questions](Evidence-and-open-questions.md) | Provenance, uncertain claims and next research targets |
 
 ## Reading evidence correctly

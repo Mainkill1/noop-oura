@@ -1,0 +1,10 @@
+<resources>
+    <string name="oura_delivery_title">Live-HR-Empfang · gespeichertes Fenster</string>
+    <string name="oura_delivery_counts">Messwerte %1$d · Benachrichtigungen %2$s · Größte Benachrichtigungsgruppe %3$s</string>
+    <string name="oura_delivery_gaps">Empfangsabstände (ms): letzter %1$s · min. %2$s · max. %3$s</string>
+    <string name="oura_delivery_queue">App-Rückrufwarteschlange (ms): zuletzt %1$s · max. %2$s</string>
+    <string name="oura_delivery_reordered">Empfangszeiten außerhalb der Reihenfolge: %1$d</string>
+    <string name="oura_delivery_note">Bis zu 60 Sekunden aufbewahrte Messwerte. Empfangsabstände messen Rückrufankünfte am Telefon. Wartezeit misst die Zeit von der Rückrufankunft bis zum Verarbeitungsbeginn. Beides ist weder Ring-Messzeit noch Bluetooth-Übertragungsverzögerung. Mehrere Messwerte können eine Benachrichtigung teilen; getrennte Rückrufe können ebenfalls gebündelt eintreffen.</string>
+    <string name="oura_delivery_candidate">Ein mögliches Altersfeld liegt in den HR-Rohbytes 3–4 nach der Unteroperation. Einheit und Bezugspunkt sind nicht validiert. Es wird nicht von der Empfangszeit abgezogen.</string>
+    <string name="oura_delivery_axis">Empfangszeit am Telefon</string>
+</resources>

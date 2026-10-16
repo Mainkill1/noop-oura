@@ -141,3 +141,9 @@ renewal and new raw polling/cadence checks remain unverified on hardware.
 Apple app targets are unavailable in this Linux environment; native Apple UI/transport parity is
 not claimed. The fork currently reports no active GitHub Actions workflow roster, so local results
 are not represented as remote CI checks.
+
+
+Android 12.5.0 build 568 adds the same retained Live HR delivery recap to HR inspection: captured
+receive-gap ranges, notification grouping and callback-to-owner queue wait. These host measurements
+are separate from request/reply timing and from the unvalidated raw age field. See
+[Live timing and bursts](oura-wiki/Live-HR-timing-and-bursts.md).

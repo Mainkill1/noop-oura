@@ -5,7 +5,8 @@ import com.noop.oura.OuraLiveMotionPacket
 data class OuraLiveSelection(val hr: Boolean = false, val motion: Boolean = false)
 enum class OuraHistorySyncPhase { IDLE, SYNCING, PAUSED_FOR_LIVE }
 enum class OuraLiveStreamPhase { IDLE, WAITING, RECEIVING, STALE, UNAVAILABLE }
-data class OuraLiveHrSample(val receivedAtElapsedMs: Long, val bpm: Int, val ibiMs: Int?)
+data class OuraLiveHrSample(val receivedAtElapsedMs: Long, val bpm: Int, val ibiMs: Int?,
+    val processedAtElapsedMs: Long? = null, val notificationOrdinal: Long? = null)
 data class OuraLiveMotionSample(val receivedAtElapsedMs: Long, val sequence: Int, val sampleIndex: Int, val x: Int, val y: Int, val z: Int, val metadataByte: Int)
 data class OuraLiveStream<T>(val samples: List<T> = emptyList(), val phase: OuraLiveStreamPhase = OuraLiveStreamPhase.IDLE,
     val lastReceiptElapsedMs: Long? = null, val observedRateHz: Double? = null)
@@ -58,10 +59,11 @@ internal class OuraLiveSession {
             hr = stream(hr.toList(), snapshot.selection.hr, hrUnavailable, lastHrReceipt, now, 5_000) { it.receivedAtElapsedMs },
             motion = stream(motion.toList(), snapshot.selection.motion, motionUnavailable, lastMotionReceipt, now, 1_500) { it.receivedAtElapsedMs })
     }
-    fun noteHr(bpm: Int, ibiMs: Int?, now: Long): Boolean {
+    fun noteHr(bpm: Int, ibiMs: Int?, now: Long, processedAtElapsedMs: Long? = null,
+               notificationOrdinal: Long? = null): Boolean {
         if (!snapshot.active || !snapshot.selection.hr || hrUnavailable || now < (snapshot.startedAtElapsedMs ?: now)) return false
         lastHrReceipt = now
-        hr.addLast(OuraLiveHrSample(now, bpm, ibiMs))
+        hr.addLast(OuraLiveHrSample(now, bpm, ibiMs, processedAtElapsedMs, notificationOrdinal))
         hrUnavailable = false
         tick(now)
         return true

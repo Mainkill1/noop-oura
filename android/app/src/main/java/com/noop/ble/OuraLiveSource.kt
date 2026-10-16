@@ -2174,6 +2174,7 @@ class OuraLiveSource(
         rawMemory.append(capture, receipt)
         scheduleRawPublication()
     }
+    private var handledNotificationOrdinal = 0L
     private var liveWorkScheduled = false
     private var liveOwnerPreviousGeneration: Long? = null
     private var liveTransportDirty = false
@@ -2360,6 +2361,14 @@ class OuraLiveSource(
     }
     private fun endLiveSession(reason: String, resumeHistory: Boolean = true) {
         val wasActive = sessionMemory.snapshot.active
+        if (wasActive && sessionMemory.snapshot.hr.samples.isNotEmpty()) {
+            val timing = ouraLiveDelivery(sessionMemory.snapshot.hr.samples)
+            log("Oura: HR delivery retainedReadings=${timing.readings} notifications=${timing.notifications} " +
+                "maxPerNotification=${timing.maxReadingsPerNotification} lastGapMs=${timing.lastReceiveGapMs} " +
+                "minGapMs=${timing.minReceiveGapMs} maxGapMs=${timing.maxReceiveGapMs} " +
+                "lastQueueMs=${timing.lastQueueWaitMs} maxQueueMs=${timing.maxQueueWaitMs} " +
+                "outOfOrder=${timing.outOfOrderReceipts} (host timing, not ring measurement times)")
+        }
         flushLiveMotion()
         // The last pulse can still be in the normal batching window when this page leaves.
         flush()
@@ -2434,6 +2443,8 @@ class OuraLiveSource(
     private fun handleNotification(data: ByteArray, liveGeneration: Long = liveWorkload.generation,
                                    receivedAtElapsedMs: Long = SystemClock.elapsedRealtime()) = guardedCallback("notification") {
         val d = driver ?: return@guardedCallback
+        val processingStartedAt = SystemClock.elapsedRealtime()
+        val notificationOrdinal = ++handledNotificationOrdinal
         val bytes = IntArray(data.size) { data[it].toInt() and 0xFF }
         val rawRecords = captureRawInstruments(bytes, receivedAtElapsedMs)
         // Split any packed outer frames; route 0x2F secure sub-frames through the driver's secure handler
@@ -2493,7 +2504,7 @@ class OuraLiveSource(
                 }
             } else if (frame.op == OuraFraming.secureSessionOp) {
                 val secure = OuraFraming.parseSecureFrame(frame) ?: continue
-                routeSecure(d, secure, liveGeneration, receivedAtElapsedMs)
+                routeSecure(d, secure, liveGeneration, receivedAtElapsedMs, processingStartedAt, notificationOrdinal)
             } else if (frame.op == SET_AUTH_KEY_RESP_OP) {
                 // The post-factory-reset key-install acknowledgement (`25 01 00`, OURA_PROTOCOL.md s3.2):
                 // an OUTER frame, not a 0x2F secure sub-frame and not a TLV record. Route it to the adopt
@@ -2556,7 +2567,8 @@ class OuraLiveSource(
     }
 
     /** Route a 0x2F secure sub-frame to the driver and turn its result into a transition or live events. */
-    private fun routeSecure(d: OuraDriver, secure: com.noop.oura.OuraSecureFrame, liveGeneration: Long, receivedAtElapsedMs: Long) = guardedCallback("secure-route") {
+    private fun routeSecure(d: OuraDriver, secure: com.noop.oura.OuraSecureFrame, liveGeneration: Long,
+                            receivedAtElapsedMs: Long, processingStartedAt: Long, notificationOrdinal: Long) = guardedCallback("secure-route") {
         when (val routing = d.handleSecureFrame(secure)) {
             is OuraDriver.SecureRouting.Nonce -> {
                 finishHistoryTransfer(OuraHistoryTransferOutcome.STOPPED)
@@ -2586,7 +2598,7 @@ class OuraLiveSource(
             is OuraDriver.SecureRouting.LiveHRPush -> {
                 val events = d.ingestLiveHRPush(routing.body)
                 val hr = events.filterIsInstance<OuraEvent.Hr>().firstOrNull()?.value
-                if (liveWorkload.acceptsSamples(liveGeneration) && hr != null && sessionMemory.noteHr(hr.bpm, hr.ibiMs, receivedAtElapsedMs)) publishLiveSession()
+                if (liveWorkload.acceptsSamples(liveGeneration) && hr != null && sessionMemory.noteHr(hr.bpm, hr.ibiMs, receivedAtElapsedMs, processingStartedAt, notificationOrdinal)) publishLiveSession()
                 if (liveWorkload.acceptsSamples(liveGeneration) && hr != null && hr.bpm in 30..220 && wantsLiveHR()) {
                     liveSink(hr.bpm, listOfNotNull(hr.ibiMs))
                 }

@@ -1,0 +1,10 @@
+<resources>
+    <string name="oura_delivery_title">Live HR delivery · retained window</string>
+    <string name="oura_delivery_counts">Readings %1$d · Notifications %2$s · Largest notification group %3$s</string>
+    <string name="oura_delivery_gaps">Receive gaps (ms): last %1$s · min %2$s · max %3$s</string>
+    <string name="oura_delivery_queue">App callback queue (ms): last %1$s · max %2$s</string>
+    <string name="oura_delivery_reordered">Out-of-order receive times: %1$d</string>
+    <string name="oura_delivery_note">Up to 60 seconds of retained readings. Receive gaps measure phone callback arrivals. Queue wait measures callback arrival to processing entry. Neither is ring measurement time or Bluetooth transit delay. Several readings can share one notification; separate callbacks can also arrive in a burst.</string>
+    <string name="oura_delivery_candidate">A candidate age field exists in raw HR bytes 3–4 after the sub-operation, but its units and reference are unvalidated. It is not subtracted from receive time.</string>
+    <string name="oura_delivery_axis">Phone receipt time</string>
+</resources>

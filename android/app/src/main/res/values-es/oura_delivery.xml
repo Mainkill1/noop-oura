@@ -1,0 +1,10 @@
+<resources>
+    <string name="oura_delivery_title">Entrega de FC en directo · ventana retenida</string>
+    <string name="oura_delivery_counts">Lecturas %1$d · Notificaciones %2$s · Mayor grupo por notificación %3$s</string>
+    <string name="oura_delivery_gaps">Intervalos de recepción (ms): último %1$s · mín. %2$s · máx. %3$s</string>
+    <string name="oura_delivery_queue">Cola de callbacks de la app (ms): último %1$s · máx. %2$s</string>
+    <string name="oura_delivery_reordered">Tiempos de recepción fuera de orden: %1$d</string>
+    <string name="oura_delivery_note">Hasta 60 segundos de lecturas retenidas. Los intervalos miden las llegadas de callbacks al teléfono. La espera en cola mide desde esa llegada hasta el inicio del procesamiento. Ninguno indica la hora de medición del anillo ni el retraso de tránsito Bluetooth. Una notificación puede contener varias lecturas; también pueden llegar varios callbacks en una ráfaga.</string>
+    <string name="oura_delivery_candidate">Existe un posible campo de antigüedad en los bytes HR 3–4 tras la suboperación, pero sus unidades y referencia no están validadas. No se resta del tiempo de recepción.</string>
+    <string name="oura_delivery_axis">Hora de recepción del teléfono</string>
+</resources>

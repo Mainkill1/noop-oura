@@ -190,6 +190,22 @@ class OuraLiveDeviceTest {
         compose.runOnIdle { assertEquals(listOf(OuraLiveAction.Start, OuraLiveAction.Stop, OuraLiveAction.Start, OuraLiveAction.Stop), intents.map { it.action }) }
     }
 
+    @Test fun burstTimingPopupDistinguishesSharedNotificationFromQueueWaitAtLargeText() {
+        val readings = listOf(60,70,80,90).map { OuraLiveHrSample(1000, it, null, 1003, 9) }
+        compose.setContent {
+            val density = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(density.density, 2f)) {
+                Frame { OuraDetailsDialog("Synthetic delivery", {}) { OuraLiveDeliveryDetails(readings) } }
+            }
+        }
+        compose.onNodeWithText("Readings 4 · Notifications 1 · Largest notification group 4").assertExists()
+        compose.onNodeWithText("Receive gaps (ms): last 0 · min 0 · max 0").assertExists()
+        compose.onNodeWithText("App callback queue (ms): last 3 · max 3").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("A candidate age field", substring = true).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("oura-details-close").assertIsDisplayed()
+        capture("live-hr-delivery-popup-large-font-synthetic")
+    }
+
     private fun populated(): OuraLiveSessionSnapshot {
         val hr = (31..59).filter { it !in 43..49 }.map { i -> OuraLiveHrSample(i * 1000L, 70 + (i % 12), null) }
         val motion = (310..590).filter { it !in 430..490 }.flatMap { i ->

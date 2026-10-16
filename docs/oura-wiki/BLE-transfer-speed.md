@@ -132,8 +132,11 @@ Android accepted both the high-priority and balanced requests. A successful base
 reported TX/RX 1M. The 2M preference update returned GATT status 6; the restoration preference also
 returned status 6. Neither callback proves a successful PHY change, so the recap retained the last
 successfully observed 1M/1M state. Ordinary history completed despite the unsupported tuning outcome.
-A later link timeout prevented the initial Live re-entry check; this is separate from transfer
-completion and no causal attribution to tuning is established.
+A later link timeout interrupted the initial Live re-entry check while the ring had been moved
+away, as the user subsequently confirmed. Returning the ring restored automatic connection and
+authentication with the existing key. Live then produced fresh data, stopped on Home and resumed
+on return. Read-only status after Live exit reported automatic mode 1. No causal attribution of
+the earlier timeout to PHY tuning is established.
 
 The observed small notification ceiling makes packing a stronger lead than simply raising the MTU.
 It does not prove which bundling/policy candidate the firmware supports or that those writes are
