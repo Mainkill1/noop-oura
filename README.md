@@ -626,6 +626,7 @@ That's it — copy away.
 - [`DISCLAIMER.md`](DISCLAIMER.md) — trademark, interoperability, and medical/legal notice.
 - [`ATTRIBUTION.md`](ATTRIBUTION.md) — full credits and licensing notes.
 - [`docs/SCOPE.md`](docs/SCOPE.md) — which WHOOP-app features stay out of scope (and why) versus their local, on-device equivalents.
+- [Oura communication wiki](docs/oura-wiki/Home.md) — known ring channels, history extraction, timing, BLE throughput and explicitly unvalidated official-app findings.
 - [`project.yml`](project.yml) — XcodeGen project definition (source of `Strand.xcodeproj`).
 
 ---
