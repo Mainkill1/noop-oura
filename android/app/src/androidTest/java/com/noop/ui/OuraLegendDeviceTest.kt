@@ -80,8 +80,9 @@ class OuraLegendDeviceTest {
             OuraLivePanel(OuraLiveSessionSnapshot(sourceDeviceId = "synthetic"), 12000,
                 OuraCategory.Health, setOf("hr"), true, true, OuraHistorySyncPhase.IDLE, {}, { history++ }, oxygenMode = mode)
         } }
+        compose.onNodeWithTag("oura-live-oxygen-status").performScrollTo().performClick()
         compose.onNodeWithText("The ring reports oxygen sensing is off.").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("O₂ · recorded only").assertExists()
+        compose.onAllNodesWithText("O₂ · recorded only").onLast().assertExists()
         compose.onNodeWithText("Updated", substring = true).assertDoesNotExist()
         capture("oxygen-off-live-status-synthetic")
         compose.runOnIdle { mode = 1 }
@@ -89,6 +90,7 @@ class OuraLegendDeviceTest {
         compose.onNodeWithText("Updated", substring = true).assertDoesNotExist()
         compose.runOnIdle { mode = null }
         compose.onNodeWithText("Oxygen sensing status is unavailable.").assertExists()
+        compose.onNodeWithTag("oura-details-close").performClick()
         compose.onNodeWithText("View oxygen history").performScrollTo().performClick()
         compose.runOnIdle { assertEquals(1, history) }
     }
@@ -108,7 +110,7 @@ class OuraLegendDeviceTest {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val directory = java.io.File(context.getExternalFilesDir(null), "oura-test-evidence")
         check(directory.mkdirs() || directory.isDirectory)
-        val bitmap = compose.onRoot().captureToImage().asAndroidBitmap()
+        val bitmap = compose.onAllNodes(isRoot()).onLast().captureToImage().asAndroidBitmap()
         try { java.io.File(directory, "$name.png").outputStream().use {
             check(bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it))
         } } finally { bitmap.recycle() }

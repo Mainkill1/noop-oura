@@ -86,13 +86,27 @@ class OuraLiveDeviceTest {
         compose.onNodeWithText("X axis: —").assertExists()
         compose.onNodeWithText("Updated 5 seconds ago").assertDoesNotExist()
         compose.onNodeWithText("Cursor: 5 seconds ago").assertExists()
+        compose.onNodeWithTag("oura-details-close").performClick()
         plot.performTouchInput { click(percentOffset(28f / 30f, .5f)) }
         compose.onNodeWithText("Heart rate: 81.0 bpm").assertExists()
         compose.onNodeWithText("X axis: 123.0 raw counts").assertExists()
         compose.onNodeWithText("Cursor: 2 seconds ago").assertExists()
+        compose.onNodeWithTag("oura-details-close").performClick()
         compose.onNodeWithText("Updated 1 second ago").assertExists()
         compose.onNodeWithText("Updated 2 seconds ago").assertExists()
         capture("live-gap-cursor-synthetic")
+    }
+
+    @Test fun inactiveSourceDetailsNeverShowAnotherRingsHistoryStatus() {
+        compose.setContent { Frame {
+            OuraLivePanel(OuraLiveSessionSnapshot(sourceDeviceId = "synthetic-inactive"), 60000,
+                OuraCategory.Health, setOf("hr"), false, false, OuraHistorySyncPhase.SYNCING, {}, {},
+                detailsContent = { androidx.compose.material3.Text("Source: Synthetic B") })
+        } }
+        compose.onNodeWithTag("oura-live-session").performScrollTo().performClick()
+        compose.onNodeWithText("Source: Synthetic B").assertExists()
+        val status = InstrumentationRegistry.getInstrumentation().targetContext.getString(com.noop.R.string.oura_live_history_syncing)
+        compose.onNodeWithText(status).assertDoesNotExist()
     }
 
     @Test fun perStreamFreshnessAndEmptyWaitingRemainDistinct() {
@@ -198,7 +212,7 @@ class OuraLiveDeviceTest {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val directory = java.io.File(context.getExternalFilesDir(null), "oura-test-evidence")
         check(directory.mkdirs() || directory.isDirectory)
-        val bitmap = compose.onRoot().captureToImage().asAndroidBitmap()
+        val bitmap = compose.onAllNodes(isRoot()).onLast().captureToImage().asAndroidBitmap()
         try { java.io.File(directory, "$name.png").outputStream().use { check(bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)) } }
         finally { bitmap.recycle() }
     }

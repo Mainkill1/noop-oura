@@ -1,8 +1,10 @@
 package com.noop.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import com.noop.R
@@ -19,7 +21,7 @@ import kotlin.math.roundToInt
 
 /** One lazy item per night; parse only visible nights, away from the UI thread. */
 @Composable
-internal fun OuraSleepCard(sleep: SleepSession) {
+internal fun OuraSleepCard(sleep: SleepSession, detailsContent: @Composable () -> Unit = {}) {
     val parsed by produceState<Pair<SleepStageTotals.Minutes?, List<PersistedSegment>>?>(null, sleep) {
         value = null
         value = withContext(Dispatchers.Default) {
@@ -51,14 +53,20 @@ internal fun OuraSleepCard(sleep: SleepSession) {
     }
     val totals = parsed?.first
     val format = remember { DateTimeFormatter.ofLocalizedDateTime(FormatStyle.SHORT).withZone(ZoneId.systemDefault()) }
-    OuraPanel {
+    var details by rememberSaveable(sleep.deviceId, sleep.startTs) { mutableStateOf(false) }
+    if (details) OuraDetailsDialog(stringResource(R.string.oura_sleep), { details = false }) {
+        detailsContent()
+        Text(format.format(Instant.ofEpochSecond(sleep.effectiveStartTs)) + " – " + format.format(Instant.ofEpochSecond(sleep.endTs)),
+            style = NoopType.captionNumber, color = Palette.textSecondary)
+        totals?.let {
+            Text(stringResource(R.string.oura_sleep_totals, it.asleep.roundToInt(), it.deep.roundToInt(), it.light.roundToInt(), it.rem.roundToInt()),
+                style = NoopType.captionNumber, color = Palette.textSecondary)
+        }
+    }
+    OuraPanel(Modifier.clickable(onClickLabel = stringResource(R.string.oura_details_open)) { details = true }) {
         Column(verticalArrangement = Arrangement.spacedBy(Metrics.space8)) {
             Text(format.format(Instant.ofEpochSecond(sleep.effectiveStartTs)) + " – " + format.format(Instant.ofEpochSecond(sleep.endTs)),
                 style = NoopType.captionNumber, color = Palette.textSecondary)
-            totals?.let {
-                Text(stringResource(R.string.oura_sleep_totals, it.asleep.roundToInt(), it.deep.roundToInt(), it.light.roundToInt(), it.rem.roundToInt()),
-                    style = NoopType.captionNumber, color = Palette.textSecondary)
-            }
             val stages = parsed?.second
             when {
                 stages == null -> Box(Modifier.fillMaxWidth().height(Metrics.compactChartHeight)) {

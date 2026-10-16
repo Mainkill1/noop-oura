@@ -62,13 +62,16 @@ class OuraExplorerDeviceTest {
         compose.onNodeWithTag("oura-trace-battery").assertIsNotEnabled()
         val plot = compose.onNodeWithTag("oura-comparison-plot").performScrollTo()
         plot.performTouchInput { click(percentOffset(0.15f, 0.5f)) }
-        compose.onNodeWithText("60.0 bpm", substring = true).assertExists()
+        compose.onNodeWithText("Median 60.0 bpm · Range 60.0 bpm–60.0 bpm · 1 readings").assertExists()
         captureEvidence("explorer-comparison-inspection")
+        compose.onNodeWithTag("oura-details-close").performClick()
         plot.performTouchInput { click(percentOffset(0.5f, 0.5f)) }
         assertTrue(compose.onAllNodesWithText("—").fetchSemanticsNodes().size >= 4)
+        compose.onNodeWithTag("oura-details-close").performClick()
         val next = plot.fetchSemanticsNode().config[SemanticsActions.CustomActions].last()
         compose.runOnIdle { assertTrue(next.action()) }
-        compose.onNodeWithText("90.0 bpm", substring = true).assertExists()
+        plot.performSemanticsAction(SemanticsActions.OnClick) { it() }
+        compose.onNodeWithText("Median 90.0 bpm · Range 90.0 bpm–90.0 bpm · 1 readings").assertExists()
     }
 
     @Test fun populatedComparisonAndMovementVisualReview() {
@@ -92,6 +95,7 @@ class OuraExplorerDeviceTest {
         captureEvidence("explorer-comparison-populated")
         compose.onNodeWithTag("oura-category-picker").performScrollTo()
         selectCategory(OuraCategory.Movement)
+        compose.onNodeWithTag("oura-movement-tile").performScrollTo().performClick()
         compose.onNodeWithText("Orientation code").performScrollTo().assertIsDisplayed()
         captureEvidence("explorer-movement-details")
     }
@@ -140,7 +144,7 @@ class OuraExplorerDeviceTest {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val directory = java.io.File(context.getExternalFilesDir(null), "oura-test-evidence")
         check(directory.mkdirs() || directory.isDirectory)
-        val bitmap = compose.onRoot().captureToImage().asAndroidBitmap()
+        val bitmap = compose.onAllNodes(isRoot()).onLast().captureToImage().asAndroidBitmap()
         try {
             java.io.File(directory, "$name.png").outputStream().use {
                 check(bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it))

@@ -8,6 +8,31 @@ borders, small corner radii, and dense controls. Graphs receive more of the avai
 The dashboard and live-session lifecycle are Android-specific. Pure live-motion wire decoding and
 command builders have Kotlin/Swift twins. Motion remains raw instrumentation and does not change scoring.
 
+## Compact graphs and detail popups
+
+Android 12.5.0 keeps the overview tiles to a name, value and unit. Selecting a tile or graph opens
+a scrollable detail popup with original-value statistics, stored timestamps, calculation notes and
+available source context. Movement inspectors, sleep totals, raw acquisition/decoding information,
+oxygen configuration and live inspection values use the same popup pattern. Legends, axis labels,
+current values, receipt age and essential connection/availability states remain on the main view.
+
+Historical numeric graphs and Compare have a small smoothing slider above the plot. Off preserves
+the median trace; the other settings average up to 3, 5, 9 or 15 consecutive bucket medians. Each
+real gap resets the trailing window. This changes only the drawn line: ranges, averages, extrema,
+stored values and selected-bucket inspection remain original. Sleep stages and orientation remain
+categorical and are not smoothed. Captured motion uses the same stored peak-extrema resolver in its
+overview and graph popups, so the two readouts cannot silently use different bounds.
+
+Popups label the local snapshot load time separately from stored sample timestamps. Imported daily
+timestamps and host receipt timestamps are not described as ring measurement times. The current
+storage does not retain per-sample download timestamps; the popup says so instead of manufacturing
+a pull time. A source's history status is displayed only for the selected active ring. Opening or
+closing a popup and changing smoothing never requests additional ring work.
+
+This is Android presentation work; it changes no decoder, persisted value, database schema or shared
+analytics formula. Native Apple UI parity is not claimed. The independent ring communication
+reference is in the [Oura wiki](oura-wiki/Home.md).
+
 ## Raw instruments
 
 **Raw** offers event and field dropdowns with **Graph**, **Gauge**, **Numbers**, and **Bytes** displays.
@@ -295,3 +320,11 @@ schema-oracle directory is missing. Direct ADB instrumentation avoids AGP 8.5.2�
 discovery null-pointer error. Require the runner’s `OK` summary; shell exit status alone is insufficient.
 Screenshots use Compose capture and remain build artifacts under the app’s external-files
 `oura-test-evidence` directory. No real biometric data is inserted by these tests.
+
+### Android 12.5.0 smoothing and inspection verification
+
+All 21 selected synthetic phone checks pass (20 in the full run, the remaining comparison
+accessibility case in a focused rerun). They cover historical smoothing, raw cursor values and gaps,
+large-font popup scrolling, source attribution, oxygen configuration wording, legends, and measured
+bottom-navigation clearance. Popup screenshots use the dialog window. The oxygen status title and
+History button have separate tap targets. These synthetic checks do not establish BLE behavior.

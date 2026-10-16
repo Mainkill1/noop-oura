@@ -102,22 +102,21 @@ class OuraRawDeviceTest {
             compose.onNodeWithTag("oura-raw-interval").performScrollTo().performClick()
             compose.onNodeWithTag("oura-raw-interval-250").performScrollTo().performClick()
             compose.runOnIdle { assertEquals(250L, interval) }
-            compose.onNodeWithTag("oura-raw-last-detail").performScrollTo().assertIsDisplayed()
-            val beforeDetail = compose.onNodeWithTag("oura-raw-last-detail").getUnclippedBoundsInRoot()
-            var couldScrollFurther = false
-            // Visibility in the list viewport does not account for a sibling navigation overlay.
-            // Consume the remaining trailing padding before measuring clearance at the actual end.
+            compose.onNodeWithTag("oura-raw-last-detail").assertDoesNotExist()
+            val detailsButton = compose.onNodeWithTag("oura-raw-details").performScrollTo()
             compose.runOnIdle {
-                couldScrollFurther = listState.canScrollForward
-                kotlinx.coroutines.runBlocking {
-                    listState.scrollBy(listState.layoutInfo.viewportSize.height.toFloat())
-                }
+                kotlinx.coroutines.runBlocking { listState.scrollBy(listState.layoutInfo.viewportSize.height.toFloat()) }
             }
             compose.runOnIdle { assertFalse("Clearance must be measured at the scroll end", listState.canScrollForward) }
-            val detail = compose.onNodeWithTag("oura-raw-last-detail").getUnclippedBoundsInRoot()
+            val button = detailsButton.getUnclippedBoundsInRoot()
             val overlay = compose.onNodeWithTag("synthetic-raw-overlay").getUnclippedBoundsInRoot()
-            assertTrue("Raw detail must clear measured bottom navigation: before=$beforeDetail, " +
-                "couldScrollFurther=$couldScrollFurther, after=$detail, overlay=$overlay", detail.bottom <= overlay.top)
+            assertTrue("Details control must clear measured bottom navigation", button.bottom <= overlay.top)
+            detailsButton.performClick()
+            compose.onNodeWithTag("oura-raw-last-detail").performScrollTo().assertIsDisplayed()
+            val detail = compose.onNodeWithTag("oura-raw-last-detail").getUnclippedBoundsInRoot()
+            val modal = compose.onNodeWithTag("oura-details-content").getUnclippedBoundsInRoot()
+            assertTrue("Retention details must remain inside the scrolling popup", detail.bottom <= modal.bottom)
+            compose.onNodeWithTag("oura-details-close").assertIsDisplayed()
             capture("raw-bottom-clearance-synthetic")
         } finally { compose.runOnIdle { BottomBarStyleStore.barHeight = originalHeight } }
     }
@@ -133,7 +132,7 @@ class OuraRawDeviceTest {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val directory = java.io.File(context.getExternalFilesDir(null), "oura-test-evidence")
         check(directory.mkdirs() || directory.isDirectory)
-        val bitmap = compose.onRoot().captureToImage().asAndroidBitmap()
+        val bitmap = compose.onAllNodes(isRoot()).onLast().captureToImage().asAndroidBitmap()
         try { java.io.File(directory, "$name.png").outputStream().use { check(bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)) } }
         finally { bitmap.recycle() }
     }

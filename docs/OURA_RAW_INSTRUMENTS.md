@@ -17,6 +17,11 @@ A gauge uses an explicit observed range; it is not a clinical target. Graphs use
 time and identify their fields and units. Smoothing changes the display only. Live movement can
 show X, Y and Z together, retaining the original values for inspection.
 
+In Android 12.5.0, selecting the raw title/graph or **Acquisition and decoding details** opens a
+scrollable popup for field statistics, actual receipt/measurement timing where available, response
+latency, decoding provenance and retention. The chosen Numbers/Bytes display remains direct; the
+explanatory and diagnostic paragraphs no longer expand the main page.
+
 The byte view shows the received event's bytes as hexadecimal, decimal bytes and escaped text.
 It identifies the framing context and byte length. Byte fields remain available when a typed
 layout is unverified. Authentication frames, keys, nonces and proofs are excluded before capture.

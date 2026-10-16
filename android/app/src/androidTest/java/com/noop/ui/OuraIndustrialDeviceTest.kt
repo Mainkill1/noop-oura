@@ -111,12 +111,18 @@ class OuraIndustrialDeviceTest {
             compose.onNodeWithTag("synthetic-host-graph").performScrollTo()
             capture("industrial-host-history-graph-synthetic")
             compose.runOnIdle { kotlinx.coroutines.runBlocking { listState.scrollToItem(10) } }
+            val tile = compose.onNodeWithTag("oura-host-motion-tile").performScrollTo()
+            val tileBounds = tile.fetchSemanticsNode().boundsInRoot
+            val overlay = compose.onNodeWithTag("synthetic-overlay").fetchSemanticsNode().boundsInRoot
+            assertTrue("The inspector tile must clear the measured navigation overlay", tileBounds.bottom <= overlay.top)
+            tile.performClick()
             compose.onNodeWithText("2 vectors").performScrollTo().assertExists()
             compose.onNodeWithText("X axis: mean 900.0 · min -1200 · max 3000").assertExists()
             compose.onNodeWithTag("oura-host-last-detail").performScrollTo()
             val detail = compose.onNodeWithTag("oura-host-last-detail").fetchSemanticsNode().boundsInRoot
-            val overlay = compose.onNodeWithTag("synthetic-overlay").fetchSemanticsNode().boundsInRoot
-            assertTrue("Last detail must scroll above the measured overlay", detail.bottom <= overlay.top)
+            val modal = compose.onNodeWithTag("oura-details-content").fetchSemanticsNode().boundsInRoot
+            assertTrue("Last detail must remain inside the scrollable popup", detail.bottom <= modal.bottom)
+            compose.onNodeWithTag("oura-details-close").assertIsDisplayed()
             capture("industrial-host-history-bottom-clearance-synthetic")
         } finally { compose.runOnIdle { BottomBarStyleStore.barHeight = originalHeight } }
     }
@@ -129,7 +135,7 @@ class OuraIndustrialDeviceTest {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val directory = java.io.File(context.getExternalFilesDir(null), "oura-test-evidence")
         check(directory.mkdirs() || directory.isDirectory)
-        val bitmap = compose.onRoot().captureToImage().asAndroidBitmap()
+        val bitmap = compose.onAllNodes(isRoot()).onLast().captureToImage().asAndroidBitmap()
         try { java.io.File(directory, "$name.png").outputStream().use { check(bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)) } }
         finally { bitmap.recycle() }
     }

@@ -1,5 +1,6 @@
 package com.noop.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
@@ -19,39 +20,48 @@ import java.util.Locale
 
 /** Recorded context has its own timestamps and never supplies live receipt/freshness evidence. */
 @Composable
-internal fun OuraRecordedHealth(data: OuraDashboardData, temp: TemperatureUnit, onHistory: () -> Unit) {
+internal fun OuraRecordedHealth(data: OuraDashboardData, temp: TemperatureUnit, onHistory: () -> Unit, detailsContent: @Composable () -> Unit = {}) {
     Column(Modifier.testTag("oura-recorded-health"), verticalArrangement = Arrangement.spacedBy(Metrics.space8)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(stringResource(R.string.oura_recorded_health), Modifier.weight(1f), style = NoopType.subhead, color = Palette.textPrimary)
             TextButton(onClick = onHistory) { Text(stringResource(R.string.oura_history)) }
         }
-        OuraStatsOverview(data, ouraCategoryKeys(false, OuraCategory.Health), false, temp, isLive = true)
+        OuraStatsOverview(data, ouraCategoryKeys(false, OuraCategory.Health), false, temp, isLive = true, detailsContent = detailsContent)
     }
 }
 
 /** A feature-mode report is configuration evidence; it never supplies a live oxygen value. */
 @Composable
 internal fun OuraLiveOxygenStatus(mode: Int?, onHistory: () -> Unit) {
-    Column(Modifier.testTag("oura-live-oxygen-status"), verticalArrangement = Arrangement.spacedBy(Metrics.space4)) {
-        Text(stringResource(R.string.oura_oxygen_recorded_only), style = NoopType.subhead, color = Palette.textPrimary)
+    var details by rememberSaveable { mutableStateOf(false) }
+    if (details) OuraDetailsDialog(stringResource(R.string.oura_oxygen_recorded_only), { details = false }) {
         Text(stringResource(when (mode) {
             0 -> R.string.oura_oxygen_sensing_off
             1, 2, 3 -> R.string.oura_oxygen_sensing_on
             else -> R.string.oura_oxygen_sensing_unknown
         }), style = NoopType.caption, color = Palette.textSecondary)
         Text(stringResource(R.string.oura_oxygen_live_unavailable), style = NoopType.caption, color = Palette.textSecondary)
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(Metrics.space4)) {
+        Text(stringResource(R.string.oura_oxygen_recorded_only), style = NoopType.subhead, color = Palette.textPrimary,
+            modifier = Modifier.testTag("oura-live-oxygen-status").clickable(onClickLabel = stringResource(R.string.oura_details_open)) { details = true })
         TextButton(onClick = onHistory) { Text(stringResource(R.string.oura_oxygen_view_history)) }
     }
 }
 
 /** Bounded inspection of stored seconds; full-range means remain in the History graphs. */
 @Composable
-internal fun OuraLiveMotionDetails(records: List<OuraLiveMotionHistory>) {
+internal fun OuraLiveMotionDetails(records: List<OuraLiveMotionHistory>, detailsContent: @Composable () -> Unit = {}) {
     var selectedTs by rememberSaveable { mutableStateOf<Long?>(null) }
     val index = records.indexOfFirst { it.ts == selectedTs }.coerceAtLeast(0)
     val record = records.getOrNull(index)
     val time = rememberOuraTimestampFormatter(seconds = true)
-    OuraPanel {
+    var details by rememberSaveable { mutableStateOf(false) }
+    OuraPanel(Modifier.clickable(onClickLabel = stringResource(R.string.oura_details_open)) { details = true }.testTag("oura-host-motion-tile")) {
+        Text(stringResource(R.string.oura_host_motion), style = NoopType.subhead, color = Palette.textPrimary)
+    }
+    if (details) OuraDetailsDialog(stringResource(R.string.oura_host_motion), { details = false }) {
+        detailsContent()
         Column(Modifier.testTag("oura-host-motion-details"), verticalArrangement = Arrangement.spacedBy(Metrics.space8)) {
             Text(stringResource(R.string.oura_host_motion), style = NoopType.subhead, color = Palette.textPrimary)
             Text(stringResource(R.string.oura_host_motion_info), style = NoopType.caption, color = Palette.textSecondary)

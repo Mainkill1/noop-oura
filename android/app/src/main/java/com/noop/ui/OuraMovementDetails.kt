@@ -1,5 +1,6 @@
 package com.noop.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -10,6 +11,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.testTag
 import com.noop.R
 import com.noop.data.OuraMotionWindow
 import java.time.Instant
@@ -17,12 +19,17 @@ import java.util.Locale
 
 /** A bounded inspector for the ring's recorded summary windows, including categorical orientation. */
 @Composable
-internal fun OuraMovementDetails(records: List<OuraMotionWindow>) {
+internal fun OuraMovementDetails(records: List<OuraMotionWindow>, detailsContent: @Composable () -> Unit = {}) {
     val time = rememberOuraTimestampFormatter()
     var selectedTs by rememberSaveable { mutableStateOf<Long?>(null) }
     val index = records.indexOfFirst { it.ts == selectedTs }.coerceAtLeast(0)
     val record = records.getOrNull(index)
-    OuraPanel {
+    var details by rememberSaveable { mutableStateOf(false) }
+    OuraPanel(Modifier.clickable(onClickLabel = stringResource(R.string.oura_details_open)) { details = true }.testTag("oura-movement-tile")) {
+        Text(stringResource(R.string.oura_motion_details), style = NoopType.subhead, color = Palette.textPrimary)
+    }
+    if (details) OuraDetailsDialog(stringResource(R.string.oura_motion_details), { details = false }) {
+        detailsContent()
         Column(verticalArrangement = Arrangement.spacedBy(Metrics.space8)) {
             Text(stringResource(R.string.oura_motion_details), style = NoopType.headline, color = Palette.textPrimary)
             Text(stringResource(R.string.oura_motion_info), style = NoopType.caption, color = Palette.textSecondary)

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="oura_details_close">Close</string>
+    <string name="oura_details_open">View details</string>
+    <string name="oura_smoothing">Smoothing</string>
+    <string name="oura_smoothing_off">Off</string>
+    <string name="oura_detail_summary">Min %1$s · Max %2$s · Average %3$s</string>
+    <string name="oura_detail_latest_measurement">Latest stored timestamp: %1$s</string>
+    <string name="oura_detail_calculation">Statistics use the original stored values. The unsmoothed line uses each time bucket’s median. Missing buckets stay empty.</string>
+    <string name="oura_detail_smoothing">Display smoothing averages up to %1$d consecutive bucket medians. It resets at gaps and does not alter saved readings, statistics or inspection values.</string>
+    <string name="oura_detail_source">Source: %1$s</string>
+    <string name="oura_detail_loaded">Local snapshot loaded: %1$s</string>
+    <string name="oura_detail_download_unknown">Download timestamps are not stored with these readings. Imported daily totals and live captures use their own time bases; this snapshot does not reconstruct download times.</string>
+    <string name="oura_detail_live_summary">%1$s · Min %2$s · Max %3$s · Average %4$s · %5$d observations</string>
+    <string name="oura_detail_live_window">Live statistics describe the original retained observations, up to 60 seconds. Graph smoothing changes the display only; receipt time is distinct from ring measurement time.</string>
+    <string name="oura_detail_latest_value">Latest %1$s</string>
+</resources>

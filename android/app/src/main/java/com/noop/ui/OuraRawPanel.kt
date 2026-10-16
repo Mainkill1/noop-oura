@@ -1,5 +1,6 @@
 package com.noop.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -21,7 +22,7 @@ internal enum class OuraRawDisplay { Graph, Gauge, Numbers, Bytes }
 
 @Composable
 internal fun OuraRawPanel(state: OuraRawState, now: Long, channelKey: String, intervalMs: Long,
-    eligible: Boolean, connected: Boolean, onChannel: (String) -> Unit, onInterval: (Long) -> Unit) {
+    eligible: Boolean, connected: Boolean, onChannel: (String) -> Unit, onInterval: (Long) -> Unit, detailsContent: @Composable () -> Unit = {}) {
     var fieldKey by rememberSaveable(channelKey) { mutableStateOf("") }
     var display by rememberSaveable { mutableStateOf(OuraRawDisplay.Graph) }
     var smooth by rememberSaveable { mutableStateOf(false) }
@@ -44,10 +45,10 @@ internal fun OuraRawPanel(state: OuraRawState, now: Long, channelKey: String, in
     val kind = stringResource(when (channel.acquisition) { "push" -> R.string.oura_raw_push; "poll" -> R.string.oura_raw_poll; else -> R.string.oura_raw_record })
     OuraPanel {
         Column(verticalArrangement = Arrangement.spacedBy(Metrics.space8)) {
-            Text(stringResource(R.string.oura_raw_title), style = NoopType.headline, color = Palette.textPrimary)
+            Text(stringResource(R.string.oura_raw_title), style = NoopType.headline, color = Palette.textPrimary,
+                modifier = Modifier.clickable(onClickLabel = stringResource(R.string.oura_details_open)) { details = true })
             OuraRawDropdown(stringResource(R.string.oura_raw_channel), channelKey, catalog.map { it.key },
                 { key -> val item = catalog.first { it.key == key }; item.number + " · " + rawChannelLabel(item) }, onChannel, "oura-raw-channel")
-            Text(kind + " · " + stringResource(if (channel.verified) R.string.oura_raw_verified else R.string.oura_raw_research), style = NoopType.caption, color = Palette.textSecondary)
             if (!eligible || !connected) Text(stringResource(if (!eligible) R.string.oura_live_requires_ring else R.string.oura_live_disconnected), style = NoopType.caption, color = Palette.textSecondary)
             if (!channel.supported) Text(stringResource(R.string.oura_raw_excluded), style = NoopType.body, color = Palette.textSecondary)
             else if (latest == null) Text(stringResource(if (channel.acquisition == "record") R.string.oura_raw_awaiting_record else R.string.oura_raw_never_received),
@@ -60,14 +61,7 @@ internal fun OuraRawPanel(state: OuraRawState, now: Long, channelKey: String, in
             latest?.let { receipt ->
                 Text(stringResource(R.string.oura_raw_age, ((now - receipt.receivedAtElapsedMs).coerceAtLeast(0) / 1000)), style = NoopType.captionNumber,
                     color = Palette.textSecondary, modifier = Modifier.testTag("oura-raw-age"))
-                val distinctTimes = receipts.map { it.receivedAtElapsedMs }.distinct()
-                if (distinctTimes.size > 1 && distinctTimes.last() > distinctTimes.first()) Text(stringResource(R.string.oura_raw_rate,
-                    rawNumber((distinctTimes.size - 1) * 1000.0 / (distinctTimes.last() - distinctTimes.first())),
-                    (distinctTimes.last() - distinctTimes[distinctTimes.lastIndex - 1]).toString()), style = NoopType.captionNumber, color = Palette.textSecondary)
-                Text(if (receipt.observation.ringTick == null) stringResource(R.string.oura_raw_no_ring_time)
-                    else state.measurementTimes[receipt.observation.ringTick]?.let { epoch ->
-                        stringResource(R.string.oura_raw_measurement_time, receipt.observation.ringTick.toString(), java.time.Instant.ofEpochSecond(epoch).toString())
-                    } ?: stringResource(R.string.oura_raw_ring_tick, receipt.observation.ringTick.toString()), style = NoopType.captionNumber, color = Palette.textSecondary)
+
             }
             OuraRawDropdown(stringResource(R.string.oura_raw_field), selected, choices.ifEmpty { listOf("") },
                 { key -> if (key == "xyz") stringResource(R.string.oura_raw_xyz) else if (key.isEmpty()) "—" else key + " · " + rawUnit(fields.first { it.key == key }.unit) },
@@ -75,7 +69,6 @@ internal fun OuraRawPanel(state: OuraRawState, now: Long, channelKey: String, in
             OuraRawDropdown(stringResource(R.string.oura_raw_display), display, OuraRawDisplay.entries,
                 { stringResource(when (it) { OuraRawDisplay.Graph -> R.string.oura_raw_graph; OuraRawDisplay.Gauge -> R.string.oura_raw_gauge; OuraRawDisplay.Numbers -> R.string.oura_raw_numbers; OuraRawDisplay.Bytes -> R.string.oura_raw_bytes }) },
                 { display = it }, "oura-raw-display")
-            Text(stringResource(R.string.oura_raw_window, receipts.size), style = NoopType.caption, color = Palette.textSecondary)
             when (display) {
                 OuraRawDisplay.Bytes -> latest?.observation?.let { observation ->
                     Text(stringResource(R.string.oura_raw_byte_length, observation.wire.size), style = NoopType.subhead, color = Palette.textPrimary)
@@ -87,8 +80,7 @@ internal fun OuraRawPanel(state: OuraRawState, now: Long, channelKey: String, in
                 OuraRawDisplay.Graph -> {
                     val context = androidx.compose.ui.platform.LocalContext.current
                     OuraToolbar(listOf(false, true), smooth, { context.getString(if (it) R.string.oura_live_smoothed else R.string.oura_live_raw) }, { smooth = it })
-                    Text(stringResource(R.string.oura_raw_smoothing_info), style = NoopType.caption, color = Palette.textTertiary)
-                    OuraRawGraph(selectedFields, values, smooth)
+                    OuraRawGraph(selectedFields, values, smooth, { details = true })
                 }
                 else -> selectedFields.forEach { field ->
                     val stats = OuraRawInstruments.statistics(values[field.key].orEmpty().map { it.value })
@@ -106,7 +98,29 @@ internal fun OuraRawPanel(state: OuraRawState, now: Long, channelKey: String, in
             TextButton(onClick = { details = !details }, modifier = Modifier.testTag("oura-raw-details")) {
                 Text(stringResource(R.string.oura_raw_details), style = NoopType.caption)
             }
-            if (details) {
+            if (details) OuraDetailsDialog(stringResource(R.string.oura_raw_details), { details = false }) {
+            detailsContent()
+            selectedFields.forEach { field ->
+                val stats = OuraRawInstruments.statistics(values[field.key].orEmpty().map { it.value })
+                if (stats != null) {
+                    Text(field.key + " · " + rawUnit(field.unit), style = NoopType.subhead, color = Palette.textPrimary)
+                    Text(stringResource(R.string.oura_raw_statistics, rawNumber(stats.latest), rawNumber(stats.minimum), rawNumber(stats.maximum), rawNumber(stats.mean), stats.count),
+                        style = NoopType.captionNumber, color = Palette.textSecondary)
+                }
+            }
+            latest?.let { receipt ->
+                val distinctTimes = receipts.map { it.receivedAtElapsedMs }.distinct()
+                if (distinctTimes.size > 1 && distinctTimes.last() > distinctTimes.first()) Text(stringResource(R.string.oura_raw_rate,
+                    rawNumber((distinctTimes.size - 1) * 1000.0 / (distinctTimes.last() - distinctTimes.first())),
+                    (distinctTimes.last() - distinctTimes[distinctTimes.lastIndex - 1]).toString()), style = NoopType.captionNumber, color = Palette.textSecondary)
+                Text(if (receipt.observation.ringTick == null) stringResource(R.string.oura_raw_no_ring_time)
+                    else state.measurementTimes[receipt.observation.ringTick]?.let { epoch ->
+                        stringResource(R.string.oura_raw_measurement_time, receipt.observation.ringTick.toString(), java.time.Instant.ofEpochSecond(epoch).toString())
+                    } ?: stringResource(R.string.oura_raw_ring_tick, receipt.observation.ringTick.toString()), style = NoopType.captionNumber, color = Palette.textSecondary)
+            }
+            Text(kind + " · " + stringResource(if (channel.verified) R.string.oura_raw_verified else R.string.oura_raw_research), style = NoopType.caption, color = Palette.textSecondary)
+            Text(stringResource(R.string.oura_raw_window, receipts.size), style = NoopType.caption, color = Palette.textSecondary)
+            Text(stringResource(R.string.oura_raw_smoothing_info), style = NoopType.caption, color = Palette.textSecondary)
             Text(stringResource(rawInfoLabel(channelKey)), style = NoopType.caption, color = Palette.textSecondary)
             if (channel.acquisition == "poll") {
                 Text(stringResource(R.string.oura_raw_timing_caveat), style = NoopType.caption, color = Palette.textTertiary)
@@ -114,9 +128,9 @@ internal fun OuraRawPanel(state: OuraRawState, now: Long, channelKey: String, in
                     state.poll.queueLatencyMs?.toString() ?: "—", state.poll.writeCompletionMs?.toString() ?: "—", state.poll.responseLatencyMs?.toString() ?: "—"),
                     style = NoopType.captionNumber, color = Palette.textSecondary)
             } else Text(stringResource(if (channel.acquisition == "push") R.string.oura_raw_push_info else R.string.oura_raw_history_info), style = NoopType.caption, color = Palette.textTertiary)
-            }
             Text(stringResource(R.string.oura_raw_retention, state.capture.evictedRecords, state.capture.evictedBytes, state.capture.evictedValues, state.capture.truncatedRecords),
                 style = NoopType.caption, color = Palette.textTertiary, modifier = Modifier.testTag("oura-raw-last-detail"))
+            }
         }
     }
 }
@@ -137,7 +151,7 @@ internal fun <T> OuraRawDropdown(title: String, selection: T, items: List<T>, la
 }
 
 @Composable
-private fun OuraRawGraph(fields: List<OuraRawField>, values: Map<String, List<OuraLivePoint>>, smooth: Boolean) {
+private fun OuraRawGraph(fields: List<OuraRawField>, values: Map<String, List<OuraLivePoint>>, smooth: Boolean, onDetails: () -> Unit) {
     val colors = listOf(Palette.accent, Palette.metricAmber, Palette.metricPurple)
     val points = values.values.flatten()
     if (points.isEmpty()) return
@@ -148,7 +162,7 @@ private fun OuraRawGraph(fields: List<OuraRawField>, values: Map<String, List<Ou
     val maximum = maxOf(minimum + 1, observedMaximum)
     OuraChartLegend(fields.mapIndexed { index, field -> OuraLegendEntry(field.key, field.key, rawUnit(field.unit), colors[index % colors.size], ouraLiveTraceStyle(field.key), null) })
     Text(stringResource(R.string.oura_raw_observed_range, rawNumber(minimum), rawNumber(observedMaximum), fields.firstOrNull()?.let { rawUnit(it.unit) } ?: ""), style = NoopType.captionNumber, color = Palette.textSecondary)
-    Spacer(Modifier.fillMaxWidth().height(Metrics.chartHeight).testTag("oura-raw-plot").drawWithCache {
+    Spacer(Modifier.fillMaxWidth().height(Metrics.chartHeight).testTag("oura-raw-plot").clickable(onClickLabel = stringResource(R.string.oura_details_open), onClick = onDetails).drawWithCache {
         val stroke = Metrics.space2.toPx()
         val paths = fields.map { field ->
             val raw = values[field.key].orEmpty()

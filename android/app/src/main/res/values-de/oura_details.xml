@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="oura_details_close">Schließen</string>
+    <string name="oura_details_open">Details anzeigen</string>
+    <string name="oura_smoothing">Glättung</string>
+    <string name="oura_smoothing_off">Aus</string>
+    <string name="oura_detail_summary">Min. %1$s · Max. %2$s · Durchschnitt %3$s</string>
+    <string name="oura_detail_latest_measurement">Letzter gespeicherter Zeitstempel: %1$s</string>
+    <string name="oura_detail_calculation">Statistiken verwenden die ursprünglichen gespeicherten Werte. Die ungeglättete Linie zeigt den Median jedes Zeitfensters. Fehlende Zeitfenster bleiben leer.</string>
+    <string name="oura_detail_smoothing">Die Anzeige mittelt bis zu %1$d aufeinanderfolgende Zeitfenster-Mediane. Lücken setzen die Glättung zurück. Gespeicherte Werte, Statistiken und Einzelwerte bleiben unverändert.</string>
+    <string name="oura_detail_source">Quelle: %1$s</string>
+    <string name="oura_detail_loaded">Lokaler Datenstand geladen: %1$s</string>
+    <string name="oura_detail_download_unknown">Download-Zeitstempel sind nicht mit diesen Werten gespeichert. Importierte Tagessummen und Live-Aufnahmen haben eigene Zeitbezüge; dieser Datenstand rekonstruiert keine Download-Zeiten.</string>
+    <string name="oura_detail_live_summary">%1$s · Min. %2$s · Max. %3$s · Durchschnitt %4$s · %5$d Beobachtungen</string>
+    <string name="oura_detail_live_window">Live-Statistiken beschreiben die ursprünglichen gespeicherten Beobachtungen von bis zu 60 Sekunden. Glättung betrifft nur die Anzeige. Empfangszeit und Ringmesszeit sind verschieden.</string>
+    <string name="oura_detail_latest_value">Zuletzt %1$s</string>
+</resources>

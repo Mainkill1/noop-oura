@@ -1,5 +1,6 @@
 package com.noop.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
@@ -31,7 +32,9 @@ private data class OuraCompareTrace(val trace: OuraComparison.Trace, val label: 
 @Composable
 internal fun OuraComparisonCard(keys: List<String>, signals: Map<String, SignalDecimation.Summary>,
     from: Long, to: Long, imported: Boolean, temp: TemperatureUnit,
-    selected: List<String>, onSelect: (List<String>) -> Unit) {
+    selected: List<String>, onSelect: (List<String>) -> Unit, detailsContent: @Composable () -> Unit = {}) {
+    var smoothing by rememberSaveable { mutableIntStateOf(0) }
+    var details by rememberSaveable(from, to) { mutableStateOf(false) }
     val colors = listOf(Palette.accent, Palette.metricRose, Palette.metricAmber, Palette.metricPurple)
     val selectedKeys = selected.filter { it in keys }.distinct().take(4)
     val traces = selectedKeys.mapIndexed { index, key ->
@@ -53,10 +56,29 @@ internal fun OuraComparisonCard(keys: List<String>, signals: Map<String, SignalD
         else ui.label + ": " + context.getString(R.string.oura_bucket_detail, value(ui.trace, bucket.median),
             value(ui.trace, bucket.minimum), value(ui.trace, bucket.maximum), bucket.count) + " · " + time(bucket.start) + " – " + time(bucket.end)
     }
+    if (details) OuraDetailsDialog(stringResource(R.string.oura_compare_title), { details = false }) {
+                traces.forEach { ui ->
+                    val bucket = cursor.value?.let { OuraComparison.bucketAt(ui.trace.summary.buckets, it) }
+                    Column(verticalArrangement = Arrangement.spacedBy(Metrics.space4)) {
+                        Text(ui.label, style = NoopType.subhead, color = ui.color)
+                        OuraSummaryDetails(ui.trace.summary, ui.trace.unit, ui.note, ui.trace.scale, ui.trace.offset, smoothing)
+                        if (cursor.value == null) {
+                            Text(stringResource(R.string.oura_reading_counts, ui.trace.summary.count, ui.trace.summary.buckets.size),
+                                style = NoopType.caption, color = Palette.textSecondary)
+                        } else if (bucket == null) Text("—", style = NoopType.bodyNumber, color = Palette.textTertiary)
+                        else {
+                            Text(stringResource(R.string.oura_bucket_detail, value(ui.trace, bucket.median), value(ui.trace, bucket.minimum),
+                                value(ui.trace, bucket.maximum), bucket.count), style = NoopType.captionNumber, color = Palette.textPrimary)
+                            Text(time(bucket.start) + " – " + time(bucket.end), style = NoopType.captionNumber, color = Palette.textSecondary)
+                        }
+                    }
+                }
+        detailsContent()
+    }
     OuraPanel {
         Column(verticalArrangement = Arrangement.spacedBy(Metrics.space8)) {
-            Text(stringResource(R.string.oura_compare_title), style = NoopType.headline, color = Palette.textPrimary)
-            Text(stringResource(R.string.oura_compare_info), style = NoopType.caption, color = Palette.textSecondary)
+            Text(stringResource(R.string.oura_compare_title), style = NoopType.headline, color = Palette.textPrimary,
+                modifier = Modifier.clickable(onClickLabel = stringResource(R.string.oura_details_open)) { details = true })
             Text(stringResource(R.string.oura_compare_count, selectedKeys.size), style = NoopType.captionNumber, color = Palette.textSecondary)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(Metrics.space8), verticalArrangement = Arrangement.spacedBy(Metrics.space4)) {
                 keys.forEach { key ->
@@ -73,6 +95,7 @@ internal fun OuraComparisonCard(keys: List<String>, signals: Map<String, SignalD
             }
             if (traces.isEmpty()) Text(stringResource(R.string.oura_compare_choose), style = NoopType.body, color = Palette.textSecondary)
             else {
+                OuraHistorySmoothing(smoothing) { smoothing = it }
                 OuraChartLegend(traces.mapIndexed { index, ui ->
                     OuraLegendEntry(ui.trace.id, ui.label, ui.trace.unit, ui.color, ouraComparisonTraceStyle(index))
                 })
@@ -85,28 +108,12 @@ internal fun OuraComparisonCard(keys: List<String>, signals: Map<String, SignalD
                         style = NoopType.captionNumber, color = Palette.textSecondary)
                 }
                 OuraComparisonPlot(traces, axes, from, to, cursor, descriptions.joinToString("\n"),
-                    Modifier.fillMaxWidth().height(Metrics.largeChartHeight).testTag("oura-comparison-plot"))
+                    Modifier.fillMaxWidth().height(Metrics.largeChartHeight).testTag("oura-comparison-plot"), smoothing, { details = true })
                 Row(Modifier.fillMaxWidth()) {
                     Text(time(from), Modifier.weight(1f), style = NoopType.captionNumber, color = Palette.textSecondary)
                     Text(time(to), Modifier.weight(1f), style = NoopType.captionNumber, color = Palette.textSecondary, textAlign = TextAlign.End)
                 }
-                Text(stringResource(R.string.oura_inspect), style = NoopType.caption, color = Palette.textTertiary)
-                traces.forEach { ui ->
-                    val bucket = cursor.value?.let { OuraComparison.bucketAt(ui.trace.summary.buckets, it) }
-                    Column(verticalArrangement = Arrangement.spacedBy(Metrics.space4)) {
-                        Text(ui.label, style = NoopType.subhead, color = ui.color)
-                        if (cursor.value == null) {
-                            Text(stringResource(R.string.oura_reading_counts, ui.trace.summary.count, ui.trace.summary.buckets.size),
-                                style = NoopType.caption, color = Palette.textSecondary)
-                        } else if (bucket == null) Text("—", style = NoopType.bodyNumber, color = Palette.textTertiary)
-                        else {
-                            Text(stringResource(R.string.oura_bucket_detail, value(ui.trace, bucket.median), value(ui.trace, bucket.minimum),
-                                value(ui.trace, bucket.maximum), bucket.count), style = NoopType.captionNumber, color = Palette.textPrimary)
-                            Text(time(bucket.start) + " – " + time(bucket.end), style = NoopType.captionNumber, color = Palette.textSecondary)
-                        }
-                        if (ui.note.isNotBlank()) Text(ui.note, style = NoopType.caption, color = Palette.textSecondary)
-                    }
-                }
+
             }
         }
     }
@@ -127,13 +134,15 @@ internal fun ouraComparisonDimension(key: String): String = when (key) {
 
 @Composable
 private fun OuraComparisonPlot(traces: List<OuraCompareTrace>, axes: Map<String, OuraComparison.Axis>,
-    from: Long, to: Long, cursor: MutableState<Long?>, description: String, modifier: Modifier) {
+    from: Long, to: Long, cursor: MutableState<Long?>, description: String, modifier: Modifier, smoothing: Int, onInspect: () -> Unit) {
     val anchors = remember(traces) { traces.flatMap { it.trace.summary.buckets.map { bucket -> bucket.start + (bucket.end - bucket.start) / 2 } }.distinct().sorted() }
     val previous = stringResource(R.string.oura_previous_reading)
     val next = stringResource(R.string.oura_next_reading)
     val title = stringResource(R.string.oura_compare_title)
+    val openLabel = stringResource(R.string.oura_details_open)
     Spacer(modifier.semantics {
         contentDescription = title
+        onClick(label = openLabel) { onInspect(); true }
         stateDescription = description
         customActions = listOf(
             CustomAccessibilityAction(previous) {
@@ -145,10 +154,10 @@ private fun OuraComparisonPlot(traces: List<OuraCompareTrace>, axes: Map<String,
                 if (target == null) false else { cursor.value = target; true }
             })
     }.pointerInput(from, to) {
-        detectTapGestures { cursor.value = from + ((it.x / size.width.coerceAtLeast(1)) * (to - from)).toLong().coerceIn(0, (to - from - 1).coerceAtLeast(0)) }
+        detectTapGestures { cursor.value = from + ((it.x / size.width.coerceAtLeast(1)) * (to - from)).toLong().coerceIn(0, (to - from - 1).coerceAtLeast(0)); onInspect() }
     }.pointerInput(from, to) {
         fun inspect(x: Float) { cursor.value = from + ((x / size.width.coerceAtLeast(1)) * (to - from)).toLong().coerceIn(0, (to - from - 1).coerceAtLeast(0)) }
-        detectHorizontalDragGestures(onDragStart = { inspect(it.x) }) { change, _ -> change.consume(); inspect(change.position.x) }
+        detectHorizontalDragGestures(onDragStart = { inspect(it.x) }, onDragEnd = onInspect) { change, _ -> change.consume(); inspect(change.position.x) }
     }.drawWithCache {
         fun x(ts: Long) = ((ts - from).toDouble() / (to - from).coerceAtLeast(1) * size.width).toFloat()
         fun point(ui: OuraCompareTrace, ts: Long, number: Double): Offset {
@@ -158,8 +167,9 @@ private fun OuraComparisonPlot(traces: List<OuraCompareTrace>, axes: Map<String,
         val paths = traces.mapIndexed { index, ui ->
             val path = Path()
             val buckets = ui.trace.summary.buckets
+            val trend = ouraHistoryTrend(buckets, smoothing)
             if (ui.trace.axisId in axes) buckets.forEachIndexed { i, bucket ->
-                val p = point(ui, bucket.start + (bucket.end - bucket.start) / 2, bucket.median)
+                val p = point(ui, bucket.start + (bucket.end - bucket.start) / 2, trend[i])
                 if (i == 0 || buckets[i - 1].end != bucket.start) path.moveTo(p.x, p.y) else path.lineTo(p.x, p.y)
             }
             path to ouraTraceStroke(ouraComparisonTraceStyle(index))

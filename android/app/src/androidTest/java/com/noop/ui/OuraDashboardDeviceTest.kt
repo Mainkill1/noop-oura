@@ -46,7 +46,9 @@ class OuraDashboardDeviceTest {
             }
         }
         compose.onNodeWithText("All Oura stats").assertIsDisplayed()
-        compose.onNodeWithText("90.5").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("90.5").performScrollTo().assertIsDisplayed().performClick()
+        compose.onNodeWithTag("oura-details-content").assertExists()
+        compose.onNodeWithTag("oura-details-close").assertIsDisplayed().performClick()
         compose.onNodeWithText("Battery history").performScrollTo().assertIsDisplayed()
         assertEquals(2, compose.onAllNodesWithText("—").fetchSemanticsNodes().size)
         captureEvidence("overview-large-text")
@@ -138,10 +140,13 @@ class OuraDashboardDeviceTest {
         val summary = SignalDecimation.reduce(listOf(SignalDecimation.Sample(10, 60.0),
             SignalDecimation.Sample(20, 80.0), SignalDecimation.Sample(650, 90.0)), 0, 900, 300)
         compose.setContent { TestTheme { OuraSignalCard("Test HR", "bpm", "", summary, 0, 900, true) } }
+        compose.onNodeWithTag("oura-history-smoothing").performSemanticsAction(SemanticsActions.SetProgress) { assertTrue(it(4f)) }
         val chart = compose.onNode(hasContentDescription("Test HR:", substring = true))
         chart.performTouchInput { click(percentOffset(0.15f, 0.5f)) }
+        compose.onNodeWithTag("oura-details-close").performClick()
         assertTrue(chart.fetchSemanticsNode().config[SemanticsProperties.StateDescription].contains("70.0 bpm"))
         chart.performTouchInput { click(percentOffset(0.5f, 0.5f)) }
+        compose.onNodeWithTag("oura-details-close").performClick()
         assertFalse(chart.fetchSemanticsNode().config[SemanticsProperties.StateDescription].contains("70.0 bpm"))
         val nextReading = chart.fetchSemanticsNode().config[SemanticsActions.CustomActions].last()
         compose.runOnIdle { assertTrue(nextReading.action()) }
@@ -149,6 +154,8 @@ class OuraDashboardDeviceTest {
         compose.runOnIdle { assertTrue(nextReading.action()) }
         assertTrue(chart.fetchSemanticsNode().config[SemanticsProperties.StateDescription].contains("90.0 bpm"))
         chart.performTouchInput { swipe(percentOffset(0.8f, 0.5f), percentOffset(0.15f, 0.5f)) }
+        compose.onNodeWithTag("oura-details-content").assertExists()
+        compose.onNodeWithTag("oura-details-close").performClick()
         assertTrue(chart.fetchSemanticsNode().config[SemanticsProperties.StateDescription].contains("70.0 bpm"))
         captureEvidence("chart-inspection")
     }
@@ -264,7 +271,7 @@ class OuraDashboardDeviceTest {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val directory = java.io.File(instrumentation.targetContext.getExternalFilesDir(null), "oura-test-evidence")
         check(directory.mkdirs() || directory.isDirectory)
-        val bitmap = compose.onRoot().captureToImage().asAndroidBitmap()
+        val bitmap = compose.onAllNodes(isRoot()).onLast().captureToImage().asAndroidBitmap()
         try {
             java.io.File(directory, "$name.png").outputStream().use {
                 check(bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it))
