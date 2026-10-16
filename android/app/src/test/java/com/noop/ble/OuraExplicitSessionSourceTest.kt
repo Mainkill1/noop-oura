@@ -38,6 +38,61 @@ class OuraExplicitSessionSourceTest {
     private fun settle() = shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(150))
     private fun drain(queue: OuraWriteQueue) { repeat(12) { queue.complete(true) } }
 
+    @Test fun selectedHeartRateAcceptsALateFirstSampleWithoutEndingTheRequest() {
+        ready()
+        val sent = mutableListOf<String>()
+        val queue = attachQueue(sent = sent)
+        source.startLiveSession(OuraLiveSelection(hr = true)); settle(); drain(queue)
+        repeat(3) {
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(15))
+            drain(queue)
+        }
+        assertTrue(source.liveSession.value.active)
+        assertFalse("Waiting for a first pulse must not turn HR off", sent.contains("dhr_disable"))
+        assertFalse("The visible HR page must retain its subscription", sent.contains("dhr_unsubscribe"))
+        assertEquals("Only the existing 15-second renewal cadence may request HR", 4, sent.count { it == "dhr_enable" })
+        notification(0x2f,15,0x28,2,0,2,0,0,1,4,0,0,0,0,0,0,127)
+        assertEquals(OuraLiveStreamPhase.RECEIVING, source.liveSession.value.hr.phase)
+        assertEquals(1, source.liveSession.value.hr.samples.size)
+        assertEquals(1, live.size)
+        source.stop()
+    }
+
+    @Test fun leavingLiveUnsubscribesWithoutDisablingBackgroundHeartRateAndCanRestart() {
+        ready()
+        val sent = mutableListOf<String>()
+        val queue = attachQueue(sent = sent)
+        repeat(3) {
+            sent.clear()
+            val generation = source.liveSession.value.generation
+            source.startLiveSession(OuraLiveSelection(hr = true), "oura-session-test", generation)
+            settle(); drain(queue)
+            assertEquals(listOf("dhr_enable", "dhr_subscribe"), sent.filter { it.startsWith("dhr_") })
+            notification(0x2f,15,0x28,2,0,2,0,0,1,4,0,0,0,0,0,0,127)
+            assertEquals(OuraLiveStreamPhase.RECEIVING, source.liveSession.value.hr.phase)
+            sent.clear()
+            source.stopLiveSession("oura-session-test", generation); drain(queue)
+            assertFalse(source.liveSession.value.active)
+            assertEquals(listOf("dhr_automatic", "dhr_unsubscribe"), sent.filter { it.startsWith("dhr_") })
+        }
+        sent.clear()
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(45)); drain(queue)
+        assertFalse("Leaving the live page must stop HR renewal", sent.any { it.startsWith("dhr_") })
+        source.stop()
+    }
+
+    @Test fun leavingLiveFlushesTheLastBufferedHeartRateWithoutWaitingForAnotherPacket() {
+        ready()
+        val queue = attachQueue(sent = mutableListOf())
+        source.startLiveSession(OuraLiveSelection(hr = true)); settle(); drain(queue)
+        notification(0x2f,15,0x28,2,0,2,0,0,1,4,0,0,0,0,0,0,127)
+        // The first pulse flushes the initial buffer; a following pulse can still be pending.
+        notification(0x2f,15,0x28,2,0,2,0,0,2,4,0,0,0,0,0,0,127)
+        source.stopLiveSession()
+        assertEquals(2, persisted.sumOf { it.hr.size })
+        source.stop()
+    }
+
     @Test fun oxygenStatusIsReadOnlyAndDoesNotOutliveConnection() {
         ready()
         val sent = mutableListOf<String>()
@@ -70,7 +125,7 @@ class OuraExplicitSessionSourceTest {
         assertEquals(1, sent.count { it == "dhr_enable" })
         source.stop()
     }
-    @Test fun retainedMotionSurvivesHrAddRemoveAndFirstSampleTimeout() {
+    @Test fun retainedMotionSurvivesHrAddRemoveAndWaitingForTheFirstPulse() {
         ready()
         val sent = mutableListOf<String>()
         val queue = attachQueue(sent = sent)
@@ -81,12 +136,12 @@ class OuraExplicitSessionSourceTest {
         assertEquals(listOf("dhr_enable", "dhr_subscribe"), sent)
         sent.clear()
         source.updateLiveSession(OuraLiveSelection(motion = true)); settle(); drain(queue)
-        assertEquals(listOf("dhr_disable", "dhr_unsubscribe"), sent)
+        assertEquals(listOf("dhr_automatic", "dhr_unsubscribe"), sent)
         sent.clear()
         source.updateLiveSession(OuraLiveSelection(true,true)); settle(); drain(queue)
         sent.clear()
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(11)); drain(queue)
-        assertEquals(listOf("dhr_disable", "dhr_unsubscribe"), sent)
+        assertTrue(sent.isEmpty())
         assertEquals(1, source.liveSession.value.motion.samples.size)
         source.stop()
     }
@@ -150,7 +205,7 @@ class OuraExplicitSessionSourceTest {
         assertEquals(replacementIncarnation, replacement.liveSession.value.sourceIncarnation)
     }
 
-    @Test fun reactivatedHrNeedsANewSampleEvenWhenTheOldSampleIsRetained() {
+    @Test fun reactivatedHrKeepsWaitingWhileItsRetainedSampleBecomesStale() {
         ready()
         val sent = mutableListOf<String>()
         val queue = attachQueue(sent = sent)
@@ -158,13 +213,15 @@ class OuraExplicitSessionSourceTest {
         notification(0x2f,15,0x28,2,0,2,0,0,1,4,0,0,0,0,0,0,127)
         notification(0x33,8,50,7,1,0,2,0,3,0)
         source.updateLiveSession(OuraLiveSelection(motion = true))
-        drain(queue) // HR OFF completes during the settling window.
+        drain(queue) // Unsubscribe completes during the settling window.
         source.updateLiveSession(OuraLiveSelection(true,true)); settle(); drain(queue)
         sent.clear()
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(11)); drain(queue)
-        assertEquals(OuraLiveStreamPhase.UNAVAILABLE, source.liveSession.value.hr.phase)
+        assertEquals(OuraLiveStreamPhase.STALE, source.liveSession.value.hr.phase)
         assertEquals(1, source.liveSession.value.hr.samples.size)
-        assertEquals(listOf("dhr_disable", "dhr_unsubscribe"), sent)
+        assertTrue(sent.isEmpty())
+        notification(0x2f,15,0x28,2,0,2,0,0,1,4,0,0,0,0,0,0,127)
+        assertEquals(OuraLiveStreamPhase.RECEIVING, source.liveSession.value.hr.phase)
         source.stop()
     }
 
@@ -346,17 +403,17 @@ class OuraExplicitSessionSourceTest {
         assertEquals(OuraLiveSelection(hr = true), source.liveSession.value.selection)
         source.stop()
     }
-    @Test fun silentChannelTimesOutWithoutStoppingTheOtherStreamOrRetrying() {
+    @Test fun silentMotionTimesOutWithoutStoppingHeartRateOrRetryingMotion() {
         ready()
         source.startLiveSession(OuraLiveSelection(true,true))
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(150))
-        notification(0x33,8,50,7,1,0,2,0,3,0)
+        notification(0x2f,15,0x28,2,0,2,0,0,1,4,0,0,0,0,0,0,127)
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(11))
         assertTrue(source.liveSession.value.active)
-        assertEquals(OuraLiveStreamPhase.UNAVAILABLE, source.liveSession.value.hr.phase)
-        assertEquals(1, source.liveSession.value.motion.samples.size)
-        notification(0x2f,15,0x28,2,0,2,0,0,1,4,0,0,0,0,0,0,127)
-        assertTrue(source.liveSession.value.hr.samples.isEmpty())
+        assertEquals(OuraLiveStreamPhase.UNAVAILABLE, source.liveSession.value.motion.phase)
+        assertEquals(1, source.liveSession.value.hr.samples.size)
+        notification(0x33,8,50,7,1,0,2,0,3,0)
+        assertTrue(source.liveSession.value.motion.samples.isEmpty())
         source.stop()
     }
     @Test fun truncatedNotificationCannotSmuggleLiveMotionPrefix() {

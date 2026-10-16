@@ -6,10 +6,19 @@ import com.noop.oura.OuraCommands
 import com.noop.oura.OuraDriverPhase
 
 class OuraLiveHRDemandTest {
-    @Test fun leavingHeartRateViewDisablesAndUnsubscribesExactlyOnce() {
+    @Test fun liveExitRestoresAutomaticMeasurementBeforeUnsubscribing() {
         val demand = OuraLiveHRDemand()
         demand.authenticated()
-        assertEquals(listOf("dhr_disable", "dhr_unsubscribe"), demand.update(false, true).map { it.label })
+        demand.update(true, true)
+        val exit = demand.update(false, true)
+        assertEquals(2, exit.size)
+        assertArrayEquals(intArrayOf(0x2f, 3, 0x22, 2, 1), exit[0].bytes)
+        assertArrayEquals(intArrayOf(0x2f, 3, 0x26, 2, 0), exit[1].bytes)
+    }
+    @Test fun leavingHeartRateViewUnsubscribesOnceWithoutDisablingBackgroundMeasurement() {
+        val demand = OuraLiveHRDemand()
+        demand.authenticated()
+        assertEquals(listOf("dhr_automatic", "dhr_unsubscribe"), demand.update(false, true).map { it.label })
         assertTrue(demand.update(false, true).isEmpty())
     }
 
@@ -25,7 +34,7 @@ class OuraLiveHRDemandTest {
         val demand = OuraLiveHRDemand()
         demand.authenticated()
         assertTrue(demand.update(false, false).isEmpty())
-        assertEquals(listOf("dhr_disable", "dhr_unsubscribe"), demand.update(false, true).map { it.label })
+        assertEquals(listOf("dhr_automatic", "dhr_unsubscribe"), demand.update(false, true).map { it.label })
     }
 
     @Test fun repeatedHistoryUpdatesNeverRepeatTheInitialStop() {
@@ -35,10 +44,10 @@ class OuraLiveHRDemandTest {
         assertTrue(demand.update(false, true).isEmpty())
     }
 
-    @Test fun newConnectionClearsLiveModeLeftByPriorProcess() {
+    @Test fun newConnectionClearsSubscriptionLeftByPriorProcess() {
         val demand = OuraLiveHRDemand()
         demand.authenticated()
-        assertEquals(listOf("dhr_disable", "dhr_unsubscribe"),
+        assertEquals(listOf("dhr_automatic", "dhr_unsubscribe"),
             demand.update(false, true).map { it.label })
     }
 
@@ -62,10 +71,10 @@ class OuraLiveHRDemandTest {
         demand.update(false, true).forEach(queue::enqueue)
         var drained = false
         if (demand.needsShutdown) {
-            queue.finishWith(listOf(OuraCommands.liveHRDisable(), OuraCommands.liveHRUnsubscribe())) { drained = true }
+            queue.finishWith(listOf(OuraCommands.liveHRRestoreAutomatic(), OuraCommands.liveHRUnsubscribe())) { drained = true }
         } else queue.close()
         repeat(3) { queue.complete(true) }
-        assertEquals(listOf("get_events", "dhr_disable", "dhr_unsubscribe"), sent)
+        assertEquals(listOf("get_events", "dhr_automatic", "dhr_unsubscribe"), sent)
         assertTrue(drained)
     }
 

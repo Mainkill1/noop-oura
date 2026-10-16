@@ -11,6 +11,7 @@ internal class OuraWriteQueue(
     private val onCompleted: (OuraCommand) -> Unit = {},
     private val elapsedMs: () -> Long = { System.nanoTime() / 1_000_000L },
     private val onFailure: (OuraCommand, Failure) -> Unit = { _, _ -> },
+    private val onPolicyBlocked: (OuraCommand) -> Unit = {},
 ) {
     enum class Failure { REJECTED, COMPLETION_FAILED, TIMED_OUT }
     private val pending = java.util.ArrayDeque<OuraCommand>()
@@ -20,10 +21,14 @@ internal class OuraWriteQueue(
     private var onDrained: (() -> Unit)? = null
     private var onLiveStopped: (() -> Unit)? = null
     private var liveSelection: OuraLiveSelection? = null
-    private var hrModeMayBeEnabled = false
+    // Tracks this queue's live request, not the ring's background feature mode.
+    private var hrModeRequested = false
     private var hrSubscriptionMayBeEnabled = false
     private var motionMayBeEnabled = false
     private var motionLeaseStartedMs: Long? = null
+    // Restore automatic measurement on exit; never disable normal background HR.
+    private val backgroundHrOff = OuraCommands.liveHRDisable().bytes
+    private fun blocksBackgroundHr(command: OuraCommand) = command.bytes.contentEquals(backgroundHrOff)
 
     /** One renewal at most; selection reconciliation cancels a queued renewal before OFF. */
     @Synchronized fun renewMotionLease() {
@@ -35,7 +40,9 @@ internal class OuraWriteQueue(
     }
 
     @Synchronized fun enqueue(command: OuraCommand) {
-        if (closed || finishing || obsoleteEnable(command)) return
+        if (closed || finishing) return
+        if (blocksBackgroundHr(command)) { onPolicyBlocked(command); return }
+        if (obsoleteEnable(command)) return
         pending.addLast(command)
         pump()
     }
@@ -50,15 +57,17 @@ internal class OuraWriteQueue(
         liveSelection = selection
         pending.removeAll(::obsoleteEnable)
         // Project only writes that will precede appended work. OFFs already accepted/queued stay ordered.
-        var mode = hrModeMayBeEnabled
+        var mode = hrModeRequested
         var subscription = hrSubscriptionMayBeEnabled
         var motion = motionMayBeEnabled
         fun project(command: OuraCommand) {
+            if (blocksBackgroundHr(command)) return
             when (command.label) {
                 "dhr_enable" -> mode = true
                 "dhr_subscribe" -> subscription = true
                 "dhr_disable" -> mode = false
-                "dhr_unsubscribe" -> subscription = false
+                "dhr_automatic" -> mode = false
+                "dhr_unsubscribe" -> { mode = false; subscription = false }
                 "acm_start" -> motion = true
                 "acm_stop" -> motion = false
             }
@@ -66,7 +75,7 @@ internal class OuraWriteQueue(
         inFlight?.let(::project)
         pending.forEach(::project)
         if (!selection.hr && (mode || subscription)) {
-            pending.add(OuraCommands.liveHRDisable())
+            pending.add(OuraCommands.liveHRRestoreAutomatic())
             pending.add(OuraCommands.liveHRUnsubscribe())
         }
         if (!selection.motion && motion) pending.add(OuraCommands.liveMotionStop())
@@ -78,7 +87,7 @@ internal class OuraWriteQueue(
         pump()
     }
 
-    /** Completion barrier: zero-mask and HR OFFs must complete, never merely enter the queue. */
+    /** Completion barrier: motion stop, automatic HR restoration and unsubscribe must complete. */
     @Synchronized fun whenLiveStopped(action: () -> Unit) {
         if (closed || finishing) return
         onLiveStopped = action
@@ -91,8 +100,9 @@ internal class OuraWriteQueue(
         if (!success) { fail(command, Failure.COMPLETION_FAILED); return }
         inFlight = null
         when (command.label) {
-            "dhr_disable" -> hrModeMayBeEnabled = false
-            "dhr_unsubscribe" -> hrSubscriptionMayBeEnabled = false
+            "dhr_disable" -> hrModeRequested = false
+            "dhr_automatic" -> hrModeRequested = false
+            "dhr_unsubscribe" -> { hrModeRequested = false; hrSubscriptionMayBeEnabled = false }
             "acm_stop" -> { motionMayBeEnabled = false; motionLeaseStartedMs = null }
         }
         onCompleted(command)
@@ -115,13 +125,15 @@ internal class OuraWriteQueue(
         if (active) onFinished()
     }
 
-    /** Keep only an already accepted write and the shutdown pair; reject new normal work. */
+    /** Keep only an already accepted write and shutdown commands; reject new normal work. */
     @Synchronized fun finishWith(commands: List<OuraCommand>, drained: () -> Unit) {
         if (closed) { drained(); return }
         finishing = true
         onLiveStopped = null
         pending.clear()
-        pending.addAll(commands)
+        commands.forEach { command ->
+            if (blocksBackgroundHr(command)) onPolicyBlocked(command) else pending.addLast(command)
+        }
         onDrained = drained
         pump()
     }
@@ -129,7 +141,11 @@ internal class OuraWriteQueue(
     private fun pump() {
         if (closed || inFlight != null) return
         var command = pending.pollFirst()
-        while (command != null && obsoleteEnable(command)) command = pending.pollFirst()
+        while (command != null) {
+            if (blocksBackgroundHr(command)) onPolicyBlocked(command)
+            else if (!obsoleteEnable(command)) break
+            command = pending.pollFirst()
+        }
         if (command == null) {
             notifyLiveStopped()
             val drained = onDrained
@@ -138,7 +154,7 @@ internal class OuraWriteQueue(
         }
         inFlight = command
         when (command.label) {
-            "dhr_enable" -> hrModeMayBeEnabled = true
+            "dhr_enable" -> hrModeRequested = true
             "dhr_subscribe" -> hrSubscriptionMayBeEnabled = true
             "acm_start" -> { motionMayBeEnabled = true; motionLeaseStartedMs = elapsedMs() }
         }
@@ -157,7 +173,7 @@ internal class OuraWriteQueue(
         }
     }
     private fun notifyLiveStopped() {
-        if (closed || finishing || hrModeMayBeEnabled || hrSubscriptionMayBeEnabled || motionMayBeEnabled) return
+        if (closed || finishing || hrModeRequested || hrSubscriptionMayBeEnabled || motionMayBeEnabled) return
         if (inFlight?.label in LIVE_LABELS || pending.any { it.label in LIVE_LABELS }) return
         val callback = onLiveStopped ?: return
         onLiveStopped = null
@@ -169,7 +185,7 @@ internal class OuraWriteQueue(
         onFailure(command, reason)
     }
     companion object {
-        private val LIVE_LABELS = setOf("dhr_enable", "dhr_subscribe", "dhr_disable", "dhr_unsubscribe", "acm_start", "acm_stop")
+        private val LIVE_LABELS = setOf("dhr_enable", "dhr_subscribe", "dhr_disable", "dhr_automatic", "dhr_unsubscribe", "acm_start", "acm_stop")
     }
 
 }

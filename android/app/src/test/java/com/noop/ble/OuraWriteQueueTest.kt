@@ -1,6 +1,7 @@
 package com.noop.ble
 
 import com.noop.oura.OuraCommand
+import com.noop.oura.OuraCommands
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -161,7 +162,77 @@ class OuraWriteQueueTest {
         sent.clear()
         queue.reconcileLive(OuraLiveSelection(motion = true), allowStarts = false)
         repeat(8) { queue.complete(true) }
-        assertEquals(listOf("dhr_disable", "dhr_unsubscribe"), sent)
+        assertEquals(listOf("dhr_automatic", "dhr_unsubscribe"), sent)
+    }
+    @Test fun hrRestartWaitsForAutomaticRestorationAndUnsubscribeWithoutDuplicatingTheEnablePair() {
+        val sent = mutableListOf<String>()
+        val queue = OuraWriteQueue(submit = { sent.add(it.label); true })
+        queue.reconcileLive(OuraLiveSelection(hr = true), allowStarts = true)
+        // The first enable is accepted; its subscribe is still pending when the page leaves.
+        queue.reconcileLive(OuraLiveSelection(), allowStarts = false)
+        var resumed = 0
+        queue.whenLiveStopped { resumed++ }
+        queue.cancelLiveStoppedCallback()
+        repeat(200) { queue.reconcileLive(OuraLiveSelection(hr = true), allowStarts = true) }
+        assertEquals(listOf("dhr_enable"), sent)
+        queue.complete(true)
+        assertEquals(listOf("dhr_enable", "dhr_automatic"), sent)
+        queue.complete(true)
+        assertEquals(listOf("dhr_enable", "dhr_automatic", "dhr_unsubscribe"), sent)
+        queue.complete(true)
+        assertEquals(listOf("dhr_enable", "dhr_automatic", "dhr_unsubscribe", "dhr_enable"), sent)
+        queue.complete(true); queue.complete(true)
+        assertEquals(listOf("dhr_enable", "dhr_automatic", "dhr_unsubscribe", "dhr_enable", "dhr_subscribe"), sent)
+        assertEquals(0, resumed)
+        queue.reconcileLive(OuraLiveSelection(), allowStarts = false)
+        queue.whenLiveStopped { resumed++ }
+        assertEquals(0, resumed)
+        queue.complete(true)
+        assertEquals("Restoring the mode does not complete unsubscribe", 0, resumed)
+        queue.complete(true)
+        assertEquals(1, resumed)
+        assertTrue(queue.idle)
+    }
+    @Test fun automaticQueueBlocksFeatureWideHrOffByPayloadWithoutStrandingShutdown() {
+        val sent = mutableListOf<OuraCommand>()
+        val started = mutableListOf<String>()
+        val queue = OuraWriteQueue(submit = { sent.add(it); true }, onStarted = { started.add(it.label) })
+        queue.reconcileLive(OuraLiveSelection(hr = true), allowStarts = true)
+        // A producer's label cannot conceal the feature-wide off operation from the worker.
+        val off = OuraCommands.liveHRDisable()
+        queue.enqueue(OuraCommand("mislabeled_control", off.bytes.copyOf()))
+        queue.reconcileLive(OuraLiveSelection(), allowStarts = false)
+        var stopped = false
+        queue.whenLiveStopped { stopped = true }
+        repeat(4) { queue.complete(true) }
+        assertTrue(stopped)
+        assertEquals(listOf("dhr_enable", "dhr_automatic", "dhr_unsubscribe"), sent.map { it.label })
+        assertEquals(sent.map { it.label }, started)
+        assertFalse(sent.any { it.bytes.contentEquals(off.bytes) })
+        var drained = false
+        queue.finishWith(listOf(off)) { drained = true }
+        assertTrue("A forbidden teardown operation must not acquire an in-flight write", drained)
+        assertEquals(3, started.size)
+    }
+    @Test fun queuedMutationCannotDisableBackgroundHrOrHideTheRequiredUnsubscribe() {
+        val sent = mutableListOf<OuraCommand>()
+        val blocked = mutableListOf<String>()
+        val queue = OuraWriteQueue(submit = { sent.add(it); true }, onPolicyBlocked = { blocked.add(it.label) })
+        queue.reconcileLive(OuraLiveSelection(hr = true), allowStarts = true)
+        val queued = OuraCommand("dhr_disable", OuraCommands.liveHREnable().bytes.copyOf())
+        queue.enqueue(queued)
+        // The producer still owns the mutable bytes while an earlier write is outstanding.
+        OuraCommands.liveHRDisable().bytes.copyInto(queued.bytes)
+        queue.reconcileLive(OuraLiveSelection(), allowStarts = false)
+        var stopped = false
+        queue.whenLiveStopped { stopped = true }
+        queue.complete(true); queue.complete(true)
+        assertEquals(listOf("dhr_enable", "dhr_automatic", "dhr_unsubscribe"), sent.map { it.label })
+        assertEquals(listOf("dhr_disable"), blocked)
+        assertFalse(stopped)
+        queue.complete(true)
+        assertTrue(stopped)
+        assertTrue(queue.idle)
     }
     @Test fun stoppedBarrierWaitsForActualOffCompletionAndCanBeCancelled() {
         val queue = OuraWriteQueue(submit = { true })

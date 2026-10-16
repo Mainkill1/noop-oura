@@ -755,6 +755,11 @@ final class OuraDriverTests: XCTestCase {
         XCTAssertEqual(OuraCommands.liveHRDisable().bytes, [0x2F, 0x03, 0x22, 0x02, 0x00])
     }
 
+    func testLiveHRRestoresAutomaticMeasurementWithoutDisablingTheFeature() {
+        XCTAssertEqual(OuraCommands.liveHRRestoreAutomatic().label, "dhr_automatic")
+        XCTAssertEqual(OuraCommands.liveHRRestoreAutomatic().bytes, [0x2F, 0x03, 0x22, 0x02, 0x01])
+    }
+
     func testLiveHRUnsubscribeWritesSubscriptionOff() {
         // Matching teardown for the enable triplet's step 3 (subscribe "latest" = 0x02).
         XCTAssertEqual(OuraCommands.liveHRUnsubscribe().bytes, [0x2F, 0x03, 0x26, 0x02, 0x00])

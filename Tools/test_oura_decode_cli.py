@@ -38,6 +38,22 @@ class OuraDecodeCLITests(unittest.TestCase):
                 stream.close()
         self.assertNotEqual(self.run_cli("--live-motion-commands", "--hex", "3300").returncode, 0)
 
+    def test_hr_commands_describe_live_entry_and_normal_background_restoration(self):
+        process = subprocess.Popen([self.executable, "--live-hr-commands"],
+                                   stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        try:
+            self.assertEqual(process.wait(timeout=5), 0)
+            self.assertEqual(process.stdout.read(), "dhr_enable 2f03220203\ndhr_subscribe 2f03260202\n"
+                             "dhr_automatic 2f03220201\ndhr_unsubscribe 2f03260200\n")
+        finally:
+            if process.poll() is None:
+                process.kill()
+                process.wait()
+            for stream in (process.stdin, process.stdout, process.stderr):
+                stream.close()
+        for extra in [("--json",), ("--live-motion-commands",), ("--hex", "3300")]:
+            self.assertNotEqual(self.run_cli("--live-hr-commands", *extra).returncode, 0)
+
     def test_one_and_two_vectors_keep_signed_extremes_and_opaque_metadata(self):
         result = self.run_cli("--live-motion", "--json", "--hex", "330831fe0080ff7fffff", "330e32ff000001003412ff7f00800000")
         self.assertEqual(result.returncode, 0, result.stderr)

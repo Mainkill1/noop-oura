@@ -40,9 +40,17 @@ cannot guarantee delivery of OFF.
 Response `07 01 <status>`: zero means accepted; nonzero means rejected.
 Neither status advances the receiving phase without valid samples.
 
-Existing HR Start uses `2f 03 22 02 03`, `2f 03 26 02 02`;
-Stop uses `2f 03 22 02 00`, `2f 03 26 02 00` (OURA_PROTOCOL §5.6).
-HR keepalive only runs while HR is selected by the active page demand.
+Existing HR Start uses `2f 03 22 02 03`, `2f 03 26 02 02`. Android page/authentication/teardown
+cleanup restores automatic daytime HR with `2f 03 22 02 01`, then unsubscribes with
+`2f 03 26 02 00` (OURA_PROTOCOL §5.6). Mode 1 keeps background measurements enabled;
+subscription 0 stops phone notifications. Both writes pass through the serialized worker.
+The explicit `liveHRDisable` command remains the accurate mode-0 protocol operation, but the
+automatic Android queue rejects that payload at admission and submission, regardless of label.
+The documented connected-live auto-revert cannot replace explicit restoration: on the target
+Gen5, a read-only status probe still reported mode 3 several minutes after unsubscribe alone.
+HR keepalive only runs while HR is selected by the active page demand. These existing HR mode
+operations and their correction are coordinated in PR #1 before implementation; selecting Live
+reverses cleanup with mode 3 and subscription 2. No other feature modes are enabled.
 
 ## Notification contract
 
@@ -85,9 +93,12 @@ It resumes from the durable cursor only after live OFF writes complete locally,
 through a current-queue and generation-checked completion barrier. A pending Start
 cancels that resume. No pause opcode is sent.
 
-Each requested channel gets ten seconds for its first sample. A silent channel is
-marked unavailable and disabled once without automatic retry; the other channel
-continues independently. A new session clears the failure state.
+Motion gets ten seconds for its first sample; a silent motion channel is marked unavailable and
+disabled once without automatic retry. Selected HR continues waiting and keeps its existing paced
+15-second renewals while the page remains visible. A late first pulse is accepted. A ten-second
+quiet interval does not establish permanent HR unavailability or cancel the user's request.
+A new session clears motion failure state. The final buffered HR batch is flushed on live exit,
+even while subscription shutdown callbacks are still pending.
 Stop/Start preserves queued OFF ordering before a new Start. Local write completion
 is not a ring-side delivery guarantee. Session status remains grounded in actual samples.
 
@@ -139,6 +150,16 @@ swift run --package-path Packages/OuraProtocol oura-decode --live-motion-command
 # acm_stop 060400000000
 ```
 
+The foreground HR entry and normal background restoration commands can also be inspected:
+
+```sh
+swift run --package-path Packages/OuraProtocol oura-decode --live-hr-commands
+# dhr_enable 2f03220203
+# dhr_subscribe 2f03260202
+# dhr_automatic 2f03220201
+# dhr_unsubscribe 2f03260200
+```
+
 No command is sent; this executable has no BLE transport. Captured notifications can
 be decoded as text or JSON:
 
@@ -156,3 +177,36 @@ Timed JSON captures can be decimated offline with `--live-motion-summary [FILE]`
 This exports the same canonical count/sums/extrema/receipt payload plus `ts` and
 `mean_x/y/z`. Every input notification must carry its actual host-receipt `ts_ms`;
 missing timestamps are an error, so hex-only samples never acquire fabricated times.
+
+## Android HR recording correction
+
+The 12.4.0 release sent daytime-HR mode off at authentication and on live exit. Its first-sample
+watchdog also disabled HR after ten seconds and rejected later pulses for that session. On the
+rooted OnePlus 15, a successful authentication was followed by that exact start/cutoff sequence;
+the store contained older HR but none in the latest fifteen minutes. The investigation exported
+only counts, age and known control-state labels, with no ring credentials or biometric values.
+
+Regressions pin late first-sample acceptance, ordered automatic-mode restoration and unsubscribe,
+repeated exit/re-entry, immediate flushing of the final buffered HR, and rejection of feature-wide
+mode 0 even when a queued payload is mutated. The pure automatic-mode helper is byte-identical in
+Swift and Kotlin; executable Swift CLI output is pinned verbatim in the Kotlin command test.
+No decoder math, stored values, or database schema change. Android orchestration uses this helper;
+Apple transport lifecycle is separate and is not changed or claimed as hardware-verified here.
+
+An initial Android candidate without the ten-second cutoff recorded 22 new HR rows on the target
+ring. Its first valid HR arrived nine seconds after live entry; synthetic coverage accepts a first
+pulse at 45 seconds. Unsubscribe-only cleanup left the ring in forced live mode 3 for minutes,
+which motivated explicit automatic-mode restoration. Final mode-1 read-back and repeated page/task
+switching are pending; these interim observations do not establish that background recording has recovered.
+
+The corrected build passes 6,837 Android JVM cases (zero failures/errors, six existing skips),
+280 Swift OuraProtocol cases and 347 Tools cases, including the parity acceptance suite after
+the ordinary derived twin-authority refresh. Signed Full Release assembly and vital lint pass
+for 12.4.1 (566); its certificate matches 12.4.0. Independent scoped review found no production
+blocker. No Apple transport build or hardware verification is claimed.
+
+The corrected release is installed in place on the OnePlus 15, with unchanged encrypted ring
+preferences and UID. Authentication succeeded, a new Live session received valid HR, and stored
+HR rows increased after exit. Control logs show ordered automatic-mode restoration then
+unsubscribe. Wireless ADB disconnected before the final ring-mode read-back; local command
+completion is not represented as proof of restored ring-side automatic operation.

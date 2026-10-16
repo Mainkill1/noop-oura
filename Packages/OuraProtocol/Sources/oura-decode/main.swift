@@ -51,6 +51,7 @@ USAGE:
   oura-decode --raw-events [FILE | --hex HEX ...]
   oura-decode --live-motion [--json] [FILE | --hex HEX ...]
   oura-decode --live-motion-commands
+  oura-decode --live-hr-commands
   oura-decode --live-motion-summary [FILE]
 
 Summary mode requires ts_ms on each captured notification and exports host-time
@@ -58,6 +59,7 @@ seconds with count, sums, means, extrema and receipt bounds as JSON.
 
 Live motion replays captured notifications offline; commands prints finite Start/OFF bytes
 and exits without reading stdin. No command is sent. Metadata remains opaque raw data.
+Live HR commands prints foreground entry and automatic-mode restoration bytes offline.
 
 Reads a capture/fixture JSON array of {"hex": ...} from FILE or stdin, or raw
 records from --hex. Generation defaults to gen3. Tier-B (UNVERIFIED) tags are
@@ -76,6 +78,16 @@ var hexArgs: [String] = []
 var filePath: String?
 
 var args = Array(CommandLine.arguments.dropFirst())
+if args.contains("--live-hr-commands") {
+    guard args == ["--live-hr-commands"] else {
+        die("--live-hr-commands cannot be combined with capture or decoding options")
+    }
+    for command in [OuraCommands.liveHREnable(), OuraCommands.liveHRSubscribe(),
+                    OuraCommands.liveHRRestoreAutomatic(), OuraCommands.liveHRUnsubscribe()] {
+        print(command.label + " " + command.bytes.map { String(format: "%02x", $0) }.joined())
+    }
+    exit(0)
+}
 var i = 0
 while i < args.count {
     let a = args[i]

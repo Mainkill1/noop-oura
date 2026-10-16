@@ -419,10 +419,21 @@ Also send the matching unsubscribe when tearing down a live session: `2f 03 26 0
 `2f 03 27 02 00`. Step 3 of the enable triplet above leaves the ring subscribed at "latest"
 (byte2 = 2); the mode-disable write alone never turns that subscription back off.
 
-> Behaviour caveat: [open_oura-r3] reports that on its Ring-3 unit, realtime `0x06`-based enabling ACK'd but emitted no stream within 60–90 s, whereas the `0x2F`/feature-`0x02` path above produced ~1 Hz IBI. **NOOP must use the feature-`0x02` (`0x2F`) path, not `0x06`,** and treat absence of `0x28` pushes within ~10 s as "not streaming → retry/reseat."
+These are separate protocol operations: mode 0 disables the daytime-HR feature; subscription 0
+ends notifications to this client. Starting with Android 12.4.1, automatic page/authentication/teardown
+cleanup restores automatic mode with `2f 03 22 02 01` before unsubscribing. On the target Gen5,
+unsubscribe alone left mode 3 active for minutes. The worker cancels the phone's HR renewals,
+accepts late first samples while selected, and prevents automatic feature-wide mode-0 shutdown.
+The explicit mode-off command remains available as a protocol fact; see
+[the Android live-session contract](OURA_LIVE_PROTOCOL.md) for workload and verification limits.
+
+> Behaviour caveat: [open_oura-r3] reports that on its Ring-3 unit, realtime `0x06`-based enabling ACK'd but emitted no stream within 60–90 s, whereas the `0x2F`/feature-`0x02` path above produced ~1 Hz IBI. **NOOP must use the feature-`0x02` (`0x2F`) path, not `0x06`,** and report absence of `0x28` pushes as waiting for samples. Android continuous Live keeps its paced renewals active while selected; a ten-second quiet interval alone is not a permanent failure.
 
 ### 5.7 DHR auto-revert
-Daytime-HR auto-reverts after ~20 s; NOOP re-engages every ~15 s while a live session is open. [open_ring]
+The reference reports daytime-HR auto-revert after approximately 20 seconds. [open_ring]
+This is not established across generations: the target Gen5 still reported forced live mode 3
+several minutes after unsubscribe on 2026-10-15. Android therefore explicitly restores automatic
+mode on exit. NOOP retains its paced 15-second re-engagement only while live HR is selected.
 
 ---
 

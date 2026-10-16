@@ -18,6 +18,22 @@ import org.junit.Test
  * and the same record bytes drive the same commands/events across both ports.
  */
 class OuraDriverTest {
+    @Test fun liveHrCommandsMatchTheExecutableSwiftOracle() {
+        // Verbatim oura-decode --live-hr-commands output from the Swift twin.
+        val expected = """
+            dhr_enable 2f03220203
+            dhr_subscribe 2f03260202
+            dhr_automatic 2f03220201
+            dhr_unsubscribe 2f03260200
+        """.trimIndent()
+        val actual = listOf(OuraCommands.liveHREnable(), OuraCommands.liveHRSubscribe(),
+            OuraCommands.liveHRRestoreAutomatic(), OuraCommands.liveHRUnsubscribe())
+            .joinToString("\n") { command ->
+                command.label + " " + command.bytes.joinToString("") { "%02x".format(it) }
+            }
+        assertEquals(expected, actual)
+    }
+
     private val key: IntArray = IntArray(16) { it }   // deterministic 16-byte app key (0..15)
     private val rt: Long = 0x0001_0002
 

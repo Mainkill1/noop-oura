@@ -156,11 +156,18 @@ public enum OuraCommands {
         OuraCommand(label: "dhr_disable", bytes: [0x2F, 0x03, 0x22, featureDaytimeHR, 0x00])
     }
 
+    /// Restore automatic daytime measurement after foreground live HR. ACK: `2f 03 23 02 00`.
+    /// This restores mode 1; notification unsubscribe remains a separate operation.
+    // Kotlin twin: `OuraCommands.liveHRRestoreAutomatic`.
+    public static func liveHRRestoreAutomatic() -> OuraCommand {
+        OuraCommand(label: "dhr_automatic", bytes: [0x2F, 0x03, 0x22, featureDaytimeHR, 0x01])
+    }
+
     /// Unsubscribe from live-HR pushes: `2f 03 26 02 00`. ACK: `2f 03 27 02 00`.
     /// The enable triplet's step 3 (`liveHRSubscribe`) leaves the ring subscribed at "latest" (byte2 =
     /// 2); nothing ever wrote it back to "off" before this — `liveHRDisable` alone only touches the
-    /// feature MODE byte, not the subscription. Send both together when suspending live HR so no
-    /// notification channel is left standing open for the ring's own adaptive sampling to push through.
+    /// feature MODE byte, not the subscription. Explicit feature shutdown needs both operations.
+    /// Android page cleanup first restores automatic mode so background sampling can continue.
     /// Safe to send any time the driver has reached `.streaming`: its ACK shares subop 0x27 with the
     /// subscribe step's ACK, which `OuraDriver.nextStep(after: .enableAckReceived)` no-ops outside
     /// `.enablingLiveHR` (same reasoning as `liveHRDisable`'s ACK routing). Per OURA_PROTOCOL.md s5.6/7.2.

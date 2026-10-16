@@ -161,12 +161,17 @@ object OuraCommands {
     fun liveHRDisable(): OuraCommand =
         OuraCommand("dhr_disable", intArrayOf(0x2F, 0x03, 0x22, featureDaytimeHR, 0x00))
 
+    /** Restore automatic daytime measurement; notification unsubscribe is a separate operation. */
+    // Swift twin: `OuraCommands.liveHRRestoreAutomatic`.
+    fun liveHRRestoreAutomatic(): OuraCommand =
+        OuraCommand("dhr_automatic", intArrayOf(0x2F, 0x03, 0x22, featureDaytimeHR, 0x01))
+
     /**
      * Unsubscribe from live-HR pushes: `2f 03 26 02 00`. ACK: `2f 03 27 02 00`.
      * The enable triplet's step 3 (`liveHRSubscribe`) leaves the ring subscribed at "latest" (byte2 =
      * 2); nothing ever wrote it back to "off" before this — `liveHRDisable` alone only touches the
-     * feature MODE byte, not the subscription. Send both together when suspending live HR so no
-     * notification channel is left standing open for the ring's own adaptive sampling to push through.
+     * feature MODE byte, not the subscription. Explicit feature shutdown needs both operations.
+     * Android page cleanup first restores automatic mode so background sampling can continue.
      * Per OURA_PROTOCOL.md s5.6/7.2.
      */
     fun liveHRUnsubscribe(): OuraCommand =

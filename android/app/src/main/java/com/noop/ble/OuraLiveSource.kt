@@ -515,6 +515,7 @@ class OuraLiveSource(
             },
             onFinished = { cancelTimeout() },
             onCompleted = { command -> rawPoll.completed(command, completionReceiptElapsedMs ?: SystemClock.elapsedRealtime()); publishRawInstruments() },
+            onPolicyBlocked = { log("Oura: blocked feature-wide HR shutdown in automatic write queue") },
             onFailure = { command, reason ->
                 log("Oura: write ${command.label} failed ($reason) - closing this session without replay")
                 handler.post {
@@ -558,8 +559,8 @@ class OuraLiveSource(
     /** The nonce timer. One-shot; re-posted by [authWatchdogRunnable] after an escalation. */
     private val authWatchdogRunnable = Runnable { authWatchdogFired() }
 
-    /** Periodic live-HR re-engage: daytime HR auto-reverts after ~20 s, so while streaming we re-send the
-     *  enable+subscribe every ~15 s (OURA_PROTOCOL.md s5.7). The token lets stop() cancel it. */
+    /** Retain the existing paced 15-second HR renewal while selected (OURA_PROTOCOL.md s5.7).
+     *  Reported auto-revert varies by generation; exit explicitly restores automatic measurement. */
     private var reengageScheduled = false
     private val reengageIntervalMs = 15_000L
     private val reengageRunnable = object : Runnable {
@@ -1460,15 +1461,10 @@ class OuraLiveSource(
         dropUnanchoredHypnogramBursts()
         commitInterruptedDrainCursor()   // #2443: bank the drain's progress before the anchor goes
         if (clearsSleepWindowStash(SleepWindowStashBoundary.TEARDOWN)) recentSleepWindows049.clear()
-        // #1526 follow-up, twin of the Swift `stop()` call: cancelling the re-engage does NOT stop the
-        // ring. That is the "just stop poking it" assumption #1526's captures falsified -- daytime-HR
-        // left in mode 0x01 kept pushing green 0x80 all night, and the ring's ~20 s auto-revert never
-        // fired. A teardown that only cancels the timer therefore hands back a ring still in daytime
-        // mode, blocking its own sleep suite. Send the same disable + unsubscribe pair before the link
-        // goes. Retain it through a history fetch or an already queued disable, since either can still
-        // have an enabled command on the controller.
-        //
-        // Allow the existing shutdown pair to complete locally before disconnecting, bounded at 1.5 s.
+        // End this phone's subscription and explicit ACM request without turning off the ring's
+        // background daytime-HR feature. Already accepted enables can still be on the controller,
+        // so retain cleanup through a history fetch or an already queued unsubscribe.
+        // Allow cleanup to complete locally before disconnecting, bounded at 1.5 s.
         // A process kill or unavailable radio still cannot guarantee delivery to the ring.
         val shutdown = shutdownCommands()
         driver?.stop()
@@ -1984,7 +1980,10 @@ class OuraLiveSource(
     }
 
     private fun shutdownCommands(): List<OuraCommand> = buildList {
-        if (liveHRDemand.needsShutdown) addAll(listOf(OuraCommands.liveHRDisable(), OuraCommands.liveHRUnsubscribe()))
+        if (liveHRDemand.needsShutdown) {
+            add(OuraCommands.liveHRRestoreAutomatic())
+            add(OuraCommands.liveHRUnsubscribe())
+        }
         if (motionNeedsShutdown) add(OuraCommands.liveMotionStop())
     }
 
@@ -2085,9 +2084,7 @@ class OuraLiveSource(
     private var liveWorkScheduled = false
     private var liveOwnerPreviousGeneration: Long? = null
     private var liveTransportDirty = false
-    private var hrUnavailable = false
     private var motionUnavailable = false
-    private var hrRequestedAt: Long? = null
     private var motionRequestedAt: Long? = null
     private var liveStopReason = "explicit stop or lifecycle"
     private val liveWorker = Runnable {
@@ -2107,8 +2104,8 @@ class OuraLiveSource(
             if (change.newSession) {
                 if (sessionMemory.snapshot.active) endLiveSession("restart", resumeHistory = false)
                 sessionMemory.start(selection, SystemClock.elapsedRealtime())
-                hrUnavailable = false; motionUnavailable = false
-                hrRequestedAt = null; motionRequestedAt = null
+                motionUnavailable = false
+                motionRequestedAt = null
                 liveMotionAnchorElapsedMs = SystemClock.elapsedRealtime()
                 liveMotionAnchorEpochMs = System.currentTimeMillis()
                 liveMotionPackets = 0; liveMotionSamples = 0
@@ -2173,15 +2170,12 @@ class OuraLiveSource(
         override fun run() {
             if (!sessionMemory.snapshot.active) return
             val now = SystemClock.elapsedRealtime()
-            val failedHr = !hrUnavailable && hrRequestedAt?.let { now - it >= 10_000L &&
-                (sessionMemory.snapshot.hr.lastReceiptElapsedMs ?: Long.MIN_VALUE) < it } == true
             val failedMotion = !motionUnavailable && motionRequestedAt?.let { now - it >= 10_000L &&
                 (sessionMemory.snapshot.motion.lastReceiptElapsedMs ?: Long.MIN_VALUE) < it } == true
-            if (failedHr || failedMotion) {
-                hrUnavailable = hrUnavailable || failedHr
-                motionUnavailable = motionUnavailable || failedMotion
-                sessionMemory.unavailable(failedHr, failedMotion, now)
-                log("Oura: no first sample within 10s (HR=$failedHr, ACM=$failedMotion); silent channel disabled without retry")
+            if (failedMotion) {
+                motionUnavailable = true
+                sessionMemory.unavailable(motion = true, now = now)
+                log("Oura: no first motion sample within 10s; silent motion channel disabled without retry")
                 acceptLiveSelection(sessionMemory.snapshot.selection)
                 liveTransportDirty = true
                 scheduleLiveWorker()
@@ -2202,7 +2196,7 @@ class OuraLiveSource(
         override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {}
         override fun onActivityDestroyed(activity: Activity) {}
     }
-    private fun wantsLiveHR(): Boolean = !hrUnavailable && liveWorkload.acceptsSamples(liveWorkload.generation) &&
+    private fun wantsLiveHR(): Boolean = liveWorkload.acceptsSamples(liveWorkload.generation) &&
         sessionMemory.snapshot.let { it.active && it.selection.hr }
     private fun publishLiveSession() {
         _liveSession.value = sessionMemory.snapshot.copy(sourceDeviceId = deviceId, generation = liveWorkload.generation,
@@ -2249,18 +2243,16 @@ class OuraLiveSource(
     private fun acceptLiveSelection(selection: OuraLiveSelection) {
         liveTransportDirty = true
         commandQueue?.cancelLiveStoppedCallback()
-        if (!selection.hr) hrRequestedAt = null
         if (!selection.motion) motionRequestedAt = null
-        val effective = selection.copy(hr = selection.hr && !hrUnavailable, motion = selection.motion && !motionUnavailable)
+        val effective = selection.copy(motion = selection.motion && !motionUnavailable)
         commandQueue?.reconcileLive(effective, allowStarts = false)
     }
 
     private fun applyLiveSelection() {
         val requested = sessionMemory.snapshot.selection
         val now = SystemClock.elapsedRealtime()
-        if (!requested.hr) hrRequestedAt = null else if (hrRequestedAt == null) hrRequestedAt = now
         if (!requested.motion) motionRequestedAt = null else if (motionRequestedAt == null) motionRequestedAt = now
-        val selection = requested.copy(hr = requested.hr && !hrUnavailable, motion = requested.motion && !motionUnavailable)
+        val selection = requested.copy(motion = requested.motion && !motionUnavailable)
         liveHRDemand.update(selection.hr, ready = true)
         if (selection.hr) scheduleReengage() else cancelReengage()
         motionArmed = selection.motion
@@ -2276,6 +2268,8 @@ class OuraLiveSource(
     private fun endLiveSession(reason: String, resumeHistory: Boolean = true) {
         val wasActive = sessionMemory.snapshot.active
         flushLiveMotion()
+        // The last pulse can still be in the normal batching window when this page leaves.
+        flush()
         sessionMemory.stop(clearSamples = !resumeHistory)
         handler.removeCallbacks(liveTick)
         if (liveLifecycleRegistered) (appContext as? Application)?.unregisterActivityLifecycleCallbacks(liveLifecycle)

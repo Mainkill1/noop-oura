@@ -11,7 +11,7 @@ internal class OuraLiveHRDemand {
     var needsShutdown = false
         private set
     fun reset() { armed = false; needsShutdown = false }
-    /** The ring may retain live mode from a previous process; History must establish an explicit off. */
+    /** Restore automatic sampling and clear a previous process's notification subscription. */
     fun authenticated() {
         armed = true
         needsShutdown = true
@@ -21,7 +21,7 @@ internal class OuraLiveHRDemand {
         armed = wanted
         needsShutdown = needsShutdown || wanted
         return if (wanted) listOf(OuraCommands.liveHREnable(), OuraCommands.liveHRSubscribe())
-        else listOf(OuraCommands.liveHRDisable(), OuraCommands.liveHRUnsubscribe())
+        else listOf(OuraCommands.liveHRRestoreAutomatic(), OuraCommands.liveHRUnsubscribe())
     }
 
     fun keepAlive(wanted: Boolean, phase: OuraDriverPhase): List<OuraCommand> {
